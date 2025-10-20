@@ -126,7 +126,7 @@ export const MediaView = () => {
     const id = setTimeout(() => {
       if (!isSlideshowActive) {
         console.log('Inactivity timeout reached — restarting slideshow');
-        dispatch({ type: 'slideshow-toggle' });
+        dispatch({ type: 'toggleSlideshow', fromSlideshow: true});
       }
     }, slideshowTimeout);
 
@@ -174,7 +174,7 @@ export const MediaView = () => {
         i = Math.min(entries.length - 1, Math.max(0, index + (negate * offset)))
       }
       viewEntry(i)
-    } else if (type === 'slideshow-toggle') {
+    } else if (type === 'toggleSlideshow') {
       if (isSlideshowActive) {
         stopSlideshow();
       } else {

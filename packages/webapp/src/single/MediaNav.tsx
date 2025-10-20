@@ -80,7 +80,7 @@ export const MediaNav = ({current, prev, next, listLocation, showNavigation, dis
         </div>
       }
       <div className={classNames('absolute z-10 bottom-4 left-1/2 -translate-x-1/2 flex gap-2')}>
-        <a onClick={() => dispatch({type: 'slideshow-toggle'})} className={classNames(buttonClass, buttonBgClass, itemClass, isSlideshowActive && 'bg-blue-600 text-white')} title={isSlideshowActive ? 'Stop slideshow (space)' : 'Start slideshow (space)'}>
+        <a onClick={() => dispatch({type: 'toggleSlideshow'})} className={classNames(buttonClass, buttonBgClass, itemClass, isSlideshowActive && 'bg-blue-600 text-white')} title={isSlideshowActive ? 'Stop slideshow (space)' : 'Start slideshow (space)'}>
           <FontAwesomeIcon icon={isSlideshowActive ? icons.faPause : icons.faPlay} className={iconClass} />
         </a>
         {!appConfig.removedViewerStream && listLocation &&
