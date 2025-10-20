@@ -11,7 +11,7 @@ import { usePreviewSize } from "./usePreviewSize";
 import { classNames } from '../utils/class-names'
 import { MediaViewDisableFlags } from "./MediaViewPage";
 
-export const MediaNav = ({current, prev, next, listLocation, showNavigation, dispatch}) => {
+export const MediaNav = ({current, prev, next, listLocation, showNavigation, dispatch, isSlideshowActive}) => {
   const query = useSearchStore(state => state.query);
   const previewSize = usePreviewSize()
   const appConfig = useAppConfig()
@@ -80,6 +80,9 @@ export const MediaNav = ({current, prev, next, listLocation, showNavigation, dis
         </div>
       }
       <div className={classNames('absolute z-10 bottom-4 left-1/2 -translate-x-1/2 flex gap-2')}>
+        <a onClick={() => dispatch({type: 'slideshow-toggle'})} className={classNames(buttonClass, buttonBgClass, itemClass, isSlideshowActive && 'bg-blue-600 text-white')} title={isSlideshowActive ? 'Stop slideshow (space)' : 'Start slideshow (space)'}>
+          <FontAwesomeIcon icon={isSlideshowActive ? icons.faPause : icons.faPlay} className={iconClass} />
+        </a>
         {!appConfig.removedViewerStream && listLocation &&
           <a onClick={() => dispatch({type: 'list'})} className={classNames(buttonClass, buttonBgClass, itemClass)} title="Show media stream (ESC)">
             <FontAwesomeIcon icon={icons.faTh} className={iconClass}/>

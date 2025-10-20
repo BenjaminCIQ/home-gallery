@@ -80,6 +80,15 @@ export const MediaView = () => {
   const [hideNavigation, setHideNavigation] = useState(false)
   const [zoomFactor, setZoomFactor] = useState(1)
 
+  // Slideshow
+  const [isSlideshowActive, setIsSlideshowActive] = useState(false);
+  const [slideshowIntervalId, setSlideshowIntervalId] = useState(null);
+  const [inactivityTimeoutId, setInactivityTimeoutId] = useState(null);
+
+  const slideshowDelay = appConfig.slideshow?.interval || 3000;
+  const slideshowTimeout = appConfig.slideshow?.timeout || 60000;
+  const isSlideshowRandom = !!appConfig.slideshow?.random || true;
+
   const [hotkeys, hotkeyToAction] = useMediaViewHotkeys();
 
   let index = findEntryIndex(location, entries, id);
@@ -97,22 +106,80 @@ export const MediaView = () => {
   useEffect(() => { id && setLastId(id) }, [id])
   useEffect(() => { index >= 0 && setLastIndex(index) }, [index])
 
+  useEffect(() => {
+    return () => {
+      stopSlideshow();
+      if (inactivityTimeoutId) clearTimeout(inactivityTimeoutId);
+    };
+  }, []);
+
   const viewEntry = (index: number) => {
     const { shortId } = entries[index]
     navigate(`/view/${shortId}`, {state: {index, listLocation}, replace: true});
   }
 
+  const resetInactivityTimer = () => {
+    if (inactivityTimeoutId) {
+      clearTimeout(inactivityTimeoutId);
+    }
+
+    const id = setTimeout(() => {
+      if (!isSlideshowActive) {
+        console.log('Inactivity timeout reached — restarting slideshow');
+        dispatch({ type: 'slideshow-toggle' });
+      }
+    }, slideshowTimeout);
+
+    setInactivityTimeoutId(id);
+  };
+
+  const startSlideshow = () => {
+    if (!isSlideshowActive) {
+      setIsSlideshowActive(true);
+      setHideNavigation(true);
+      const id = setInterval(() => dispatch({ type: 'next', fromSlideshow: true }), slideshowDelay);
+      setSlideshowIntervalId(id);
+    }
+  };
+
+  const stopSlideshow = () => {
+    if (isSlideshowActive) {
+      setIsSlideshowActive(false);
+      setHideNavigation(false);
+      clearInterval(slideshowIntervalId);
+      setSlideshowIntervalId(null);
+    }
+  };
+
   const dispatch = (action: any) => {
-    const { type } = action
+    const { type, fromSlideshow } = action;
+    
+    if (!fromSlideshow) {
+      stopSlideshow();
+      resetInactivityTimer();
+    }
+
     let prevNextMatch = type.match(/(prev|next)(-(\d+))?/)
     if (type === 'index') {
       const i = Math.min(entries.length - 1, Math.max(0, action.index))
       viewEntry(i)
     } else if (prevNextMatch && entries.length) {
-      const offset = prevNextMatch[3] ? +prevNextMatch[3] : 1
-      const negate = prevNextMatch[1] == 'prev' ? -1 : 1
-      const i = Math.min(entries.length - 1, Math.max(0, index + (negate * offset)))
+      let i;
+      if (isSlideshowActive && isSlideshowRandom && fromSlideshow) {
+        // Slideshow interval in random mode → pick a random index
+        i = Math.floor(Math.random() * entries.length);
+      } else {
+        const offset = prevNextMatch[3] ? +prevNextMatch[3] : 1
+        const negate = prevNextMatch[1] == 'prev' ? -1 : 1
+        i = Math.min(entries.length - 1, Math.max(0, index + (negate * offset)))
+      }
       viewEntry(i)
+    } else if (type === 'slideshow-toggle') {
+      if (isSlideshowActive) {
+        stopSlideshow();
+      } else {
+        startSlideshow();
+      }
     } else if (type === 'similar' && current?.similarityHash && !disableFlags.includes('annotation')) {
       navigate(`/similar/${current.shortId}`);
     } else if (type === 'toggleDetails' && !disableFlags.includes('detail')) {
@@ -180,7 +247,7 @@ export const MediaView = () => {
           <div className={classNames('w-full', {'h-1/2 flex-shrink-0 md:flex-shrink md:h-full': showDetails, 'h-full': !showDetails})}>
             <div className="relative w-full h-full overflow-hidden">
               {!hideNavigation && showNavigation &&
-                <MediaNav index={index} current={current} prev={prev} next={next} listLocation={listLocation} showNavigation={showNavigation} dispatch={dispatch} />
+                <MediaNav current={current} prev={prev} next={next} listLocation={listLocation} showNavigation={showNavigation} dispatch={dispatch} isSlideshowActive={isSlideshowActive} />
               }
               {isImage &&
                 <Zoomable key={key} childWidth={current.width} childHeight={current.height} onSwipe={onSwipe} onZoom={setZoomFactor}>
