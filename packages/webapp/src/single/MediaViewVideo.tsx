@@ -79,14 +79,8 @@ export const MediaViewVideo = (props) => {
     }
 
     const onTapHandler = (ev) => {
-      if (!video.paused) {
-        return
-      }
-
+      dispatch({type: 'toggle-navigation'})
       ev.preventDefault()
-
-      setIsPlaying(true)
-      video.play()
     }
 
     const mc = new Hammer.Manager(overlay)
