@@ -255,7 +255,7 @@ export const MediaView = () => {
                 </Zoomable>
               }
               {isVideo &&
-                <MediaViewVideo key={key} media={current} next={next} prev={prev} dispatch={dispatch}/>
+                <MediaViewVideo key={key} media={current} next={next} prev={prev} dispatch={dispatch} isSlideshowActive={isSlideshowActive} />
               }
               {isUnknown &&
                 <MediaViewUnknownType key={key} media={current} next={next} prev={prev}/>

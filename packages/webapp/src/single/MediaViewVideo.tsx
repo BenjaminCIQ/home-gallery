@@ -7,7 +7,7 @@ import { usePreviewSize } from "./usePreviewSize";
 import { classNames } from "../utils/class-names";
 
 export const MediaViewVideo = (props) => {
-  const { media, dispatch } = props
+  const { media, dispatch, isSlideShowActive } = props
   const { previews } = media;
   const [isPlaying, setIsPlaying] = useState(false)
   const ref = useRef()
@@ -41,7 +41,21 @@ export const MediaViewVideo = (props) => {
       e.removeEventListener('pause', onPause)
       e.removeEventListener('play', onPlay)
     }
-  }, [ref])
+  }, [ref, dispatch])
+
+  // Autoplay if slideshow is active
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return
+
+    if (isSlideShowActive) {
+      video.play().then(() => setIsPlaying(true))
+        .catch(err => console.warn("Autoplay failed:", err))
+    } else {
+      video.pause()
+      setIsPlaying(false)
+    }
+  }, [isSlideShowActive])
 
   useEffect(() => {
     const video: HTMLMediaElement = ref.current;
