@@ -35,11 +35,19 @@ export interface WebappConfig {
 /**
  * Configuration for webapp module
  */
+interface SlideshowConfig {
+  interval: number;
+  naviTimeout: number;
+  timeout: number;
+  random: boolean;
+  loop: boolean;
+}
 export interface AppConfig {
   pluginManager?: PluginManager;
   disabled?: FeatureFlags;
   sources?: MediaSources;
   pages?: Pages;
+  slideshow?: SlideshowConfig;
   [k: string]: unknown;
 }
 export interface PluginManager {

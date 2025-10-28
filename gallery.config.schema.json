@@ -156,6 +156,41 @@
             }
           }
         }
+      },
+      "slideshow": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://raw.githubusercontent.com/xemle/home-gallery/master/gallery.config.schema.json#webapp.slideshow",
+        "title": "Slideshow",
+        "description": "Configuration for slideshow mode",
+        "type": "object",
+        "properties": {
+          "interval": {
+            "description": "Time between slides in milliseconds",
+            "type": "number",
+            "default": 5000
+          },
+          "naviTimeout": {
+            "description": "Timeout for navigation overlay to disappear (ms)",
+            "type": "number",
+            "default": 3000
+          },
+          "timeout": {
+            "description": "Maximum inactivity timeout before slideshow stops (ms)",
+            "type": "number",
+            "default": 60000
+          },
+          "random": {
+            "description": "Whether slideshow order is randomized",
+            "type": "boolean",
+            "default": true
+          },
+          "loop": {
+            "description": "Whether slideshow loops after reaching the last image",
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false
       }
     }
   }
