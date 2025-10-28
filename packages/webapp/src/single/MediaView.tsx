@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useParams,
   useLocation,
@@ -70,6 +70,7 @@ export const MediaView = () => {
   const showDetails = useSingleViewStore(state => state.showDetails);
   const showAnnotations = useSingleViewStore(state => state.showAnnotations);
   const showNavigation = useSingleViewStore(state => state.showNavigation);
+  const lastId = useSingleViewStore(state => state.lastId);
   const setLastId = useSingleViewStore(state => state.setLastId);
   const setLastIndex = useSingleViewStore(state => state.setLastIndex);
   const search = useSearchStore(state => state.search);
@@ -77,25 +78,37 @@ export const MediaView = () => {
   const setShowAnnotations = useSingleViewStore(actions => actions.setShowAnnotations);
   const setShowNavigation = useSingleViewStore(actions => actions.setShowNavigation);
 
-  const [hideNavigation, setHideNavigation] = useState(false)
-  const [zoomFactor, setZoomFactor] = useState(1)
+  const isSlideshowActive = useSingleViewStore(state => state.isSlideshowActive)
+  const setIsSlideshowActive = useSingleViewStore(actions => actions.setIsSlideshowActive)
 
-  // Slideshow
-  const [isSlideshowActive, setIsSlideshowActive] = useState(false);
-  const [slideshowIntervalId, setSlideshowIntervalId] = useState(null);
-  const [inactivityTimeoutId, setInactivityTimeoutId] = useState(null);
+  const hideNavigation = useSingleViewStore(state => state.hideNavigation)
+  const setHideNavigation = useSingleViewStore(actions => actions.setHideNavigation)
 
-  const slideshowDelay = appConfig.slideshow?.interval || 3000;
+  const shuffledIndex = useSingleViewStore(state => state.shuffledIndex)
+  const setShuffledIndex = useSingleViewStore(actions => actions.setShuffledIndex)
+  const shuffledIndices = useSingleViewStore(state => state.shuffledIndices)
+  const setShuffledIndices = useSingleViewStore(actions => actions.setShuffledIndices)
+
+  const slideshowIntervalRef = useRef<number | null>(null);
+  const inactivityTimeoutRef = useRef<number | null>(null);
+  const navigationTimeoutRef = useRef<number | null>(null);
+
+  const slideshowInterval = appConfig.slideshow?.interval || 5000;
+  const navigationTimeout = appConfig.slideshow?.naviTimeout || 3000;
   const slideshowTimeout = appConfig.slideshow?.timeout || 60000;
-  const isSlideshowRandom = !!appConfig.slideshow?.random || true;
+  const isSlideshowRandomised = appConfig.slideshow?.random || true; //shuffle
+  const loopImages = appConfig.slideshow?.loop || true; //loop
+  const searchResetOnLoopEnd = true; // or timer based??
+  
+  const [zoomFactor, setZoomFactor] = useState(1)
 
   const [hotkeys, hotkeyToAction] = useMediaViewHotkeys();
 
   let index = findEntryIndex(location, entries, id);
 
   const current = entries[index];
-  const prev = entries[index - 1];
-  const next = entries[index + 1];
+  const prev = entries[lastIndex];
+  let next = entries[index + 1];
 
   const isImage = current && (current.type === 'image' || current.type === 'rawImage');
   const isVideo = current && (current.type === 'video')
@@ -107,38 +120,87 @@ export const MediaView = () => {
   useEffect(() => { index >= 0 && setLastIndex(index) }, [index])
 
   useEffect(() => {
+    if (!isSlideshowActive || entries.length === 0) return;
+
+    console.log('Entries updated during slideshow (end of filtered)', entries);
+    
+    // Update shuffled order in store
+    reshuffle();
+
+    // Start slideshow from first entry
+    viewEntry(0);
+  }, [entries, isSlideshowActive])
+
+  const startNavigationHideTimeout = () => {
+    if (navigationTimeoutRef.current) clearTimeout(navigationTimeoutRef.current);
+
+    navigationTimeoutRef.current = setTimeout(() => {
+      setHideNavigation(true);
+    }, navigationTimeout);
+  };
+
+
+  useEffect(() => {
+    // Start inactivity timer if slideshow is not active
+    if (!isSlideshowActive) {
+      inactivityTimeoutRef.current = setTimeout(() => {
+        console.log('Inactivity timeout reached — starting slideshow');
+        dispatch({ type: 'toggleSlideshow', fromSlideshow: true });
+      }, slideshowTimeout);
+    }
+
+    // If slideshow and showNavigation has been activated, set timeout
+    if (isSlideshowActive && showNavigation)
+    {
+      startNavigationHideTimeout();
+    }
+
+    if (entries.length && !shuffleIndices.length)
+    {
+      reshuffle();
+    }
+
     return () => {
-      stopSlideshow();
-      if (inactivityTimeoutId) clearTimeout(inactivityTimeoutId);
+      if (slideshowIntervalRef.current) clearInterval(slideshowIntervalRef.current);
+      if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
+      if (navigationTimeoutRef.current) clearTimeout(navigationTimeoutRef.current);
     };
   }, []);
+
 
   const viewEntry = (index: number) => {
     const { shortId } = entries[index]
     navigate(`/view/${shortId}`, {state: {index, listLocation}, replace: true});
   }
 
-  const resetInactivityTimer = () => {
-    if (inactivityTimeoutId) {
-      clearTimeout(inactivityTimeoutId);
+  // Helper function for random shuffling of the images to ensure random order single show
+  const shuffleIndices = (length: number) => {
+    const indices = [...Array(length).keys()]; // [0, 1, 2, ...]
+  
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
     }
 
-    const id = setTimeout(() => {
-      if (!isSlideshowActive) {
-        console.log('Inactivity timeout reached — restarting slideshow');
-        dispatch({ type: 'toggleSlideshow', fromSlideshow: true});
-      }
-    }, slideshowTimeout);
+    return indices;
+  }
 
-    setInactivityTimeoutId(id);
-  };
+  const reshuffle = () => {
+    const newShuffle = isSlideshowRandomised ? shuffleIndices(entries.length) : [...Array(entries.length).keys()]
+
+      setShuffledIndex(0);
+      setShuffledIndices(newShuffle);
+      next = entries[shuffledIndices[1]];
+  }
 
   const startSlideshow = () => {
-    if (!isSlideshowActive) {
+    if (!isSlideshowActive && entries.length) {
       setIsSlideshowActive(true);
       setHideNavigation(true);
-      const id = setInterval(() => dispatch({ type: 'next', fromSlideshow: true }), slideshowDelay);
-      setSlideshowIntervalId(id);
+      if (slideshowIntervalRef.current) clearInterval(slideshowIntervalRef.current);
+      slideshowIntervalRef.current = setInterval(() => {
+        dispatch({ type: 'next', fromSlideshow: true });
+      }, slideshowInterval);
     }
   };
 
@@ -146,8 +208,7 @@ export const MediaView = () => {
     if (isSlideshowActive) {
       setIsSlideshowActive(false);
       setHideNavigation(false);
-      clearInterval(slideshowIntervalId);
-      setSlideshowIntervalId(null);
+      if (slideshowIntervalRef.current) clearInterval(slideshowIntervalRef.current);
     }
   };
 
@@ -156,7 +217,6 @@ export const MediaView = () => {
     
     if (!fromSlideshow) {
       stopSlideshow();
-      resetInactivityTimer();
     }
 
     let prevNextMatch = type.match(/(prev|next)(-(\d+))?/)
@@ -164,16 +224,43 @@ export const MediaView = () => {
       const i = Math.min(entries.length - 1, Math.max(0, action.index))
       viewEntry(i)
     } else if (prevNextMatch && entries.length) {
-      let i;
-      if (isSlideshowActive && isSlideshowRandom && fromSlideshow) {
-        // Slideshow interval in random mode → pick a random index
-        i = Math.floor(Math.random() * entries.length);
+      const offset = prevNextMatch[3] ? +prevNextMatch[3] : 1
+      const negate = prevNextMatch[1] == 'prev' ? -1 : 1
+
+      let i = shuffledIndex + (negate * offset);
+
+      // If end of indices reached
+      if (i >= shuffledIndices.length) {
+        // reset search query if slideshowActive and searchResetOnLoopEnd
+        if (isSlideshowActive && search.value && searchResetOnLoopEnd) {
+          search({type: 'none'});
+          // Wait for useEffect to trigger on updated entries
+        }
+        // if no search value and not looping, then if loop is active,
+        // then images should be reshuffled and viewing can continue
+        if (loopImages) {
+          i = (i + entries.length) % entries.length;
+          reshuffle();
+          setShuffledIndex(i);
+          viewEntry(shuffledIndices[shuffledIndex]);
+        } else {
+          stopSlideshow();
+          setShuffledIndex(shuffleIndices.length - 1);
+          viewEntry(shuffledIndices[shuffledIndex]); // goto last image
+        }
       } else {
-        const offset = prevNextMatch[3] ? +prevNextMatch[3] : 1
-        const negate = prevNextMatch[1] == 'prev' ? -1 : 1
-        i = Math.min(entries.length - 1, Math.max(0, index + (negate * offset)))
+        // if negative, then just go to last id (if exists) - this will be somewhere else in the shuffledIndices sequence though...going forward again won't take you back to the first image
+        // could be solved by storing a boolean if this event happens, then if next is called again, set index to -1 and add (negate * offset) from there
+        if (i < 0) {
+          if (lastId != '') {
+            // by not updating the shuffledIndex, calling next/prev again will go back to where it had been in the beginning of the shuffledIndices
+            viewEntry(findEntryIndex(location, entries, lastId));
+          }
+        } else {
+          setShuffledIndex(i);
+          viewEntry(shuffledIndices[shuffledIndex]); // normal case where loop has not ended
+        }
       }
-      viewEntry(i)
     } else if (type === 'toggleSlideshow') {
       if (isSlideshowActive) {
         stopSlideshow();
@@ -188,10 +275,15 @@ export const MediaView = () => {
       setShowAnnotations(!showAnnotations);
     } else if (type === 'toggleNavigation') {
       setShowNavigation(!showNavigation);
+      if (isSlideshowActive && showNavigation) {
+        startNavigationHideTimeout();
+      }
     } else if (type == 'first' && entries.length) {
-      viewEntry(0)
+      setShuffledIndex(shuffledIndices.indexOf(0)); // equal to shuffledIndices[shuffledIndex]
+      viewEntry(0);
     } else if (type == 'last' && entries.length) {
-      viewEntry(entries.length - 1)
+      setShuffledIndex(shuffledIndices.indexOf(entries.length - 1));
+      viewEntry(entries.length - 1); // equal to shuffledIndices[shuffledIndex]
     } else if (type == 'list') {
       navigate(`${listLocation.pathname}${listLocation.search ? encodeUrl(listLocation.search) : ''}`, {state: {id: current?.id}});
     } else if (type == 'chronology') {

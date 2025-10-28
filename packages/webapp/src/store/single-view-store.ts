@@ -7,12 +7,21 @@ export interface SingleViewStore {
   showDetails: boolean
   showAnnotations: boolean
   showNavigation: boolean
+  isSlideshowActive: boolean
+  hideNavigation: boolean
+  shuffledIndex: number
+  shuffledIndices: number[]
 
   setLastId(lastId: string): void
   setLastIndex(lastIndex: number): void
   setShowDetails(show: boolean): void
   setShowAnnotations(show: boolean): void
   setShowNavigation(show: boolean): void
+  setIsSlideshowActive(active: boolean): void
+  setHideNavigation(hide: boolean): void
+  setShuffledIndex(shuffledIndex: number): void
+  setShuffledIndices(indices: number[]): void
+  clearShuffledIndices(): void
 }
 
 const excludeStateProps = (excludeProps: string[] = []) => (state: any): any => Object.fromEntries(
@@ -30,12 +39,20 @@ export const useSingleViewStore = create<
   showDetails: false,
   showAnnotations: false,
   showNavigation: true,
+  isSlideshowActive: false,
+  hideNavigation: false,
+  shuffledIndices: [],
+  shuffledIndex: 0,
 
   setLastId: (lastId: string) => set((state: SingleViewStore) => ({...state, lastId})),
   setLastIndex: (lastIndex: number) => set((state: SingleViewStore) => ({...state, lastIndex})),
   setShowDetails: (show: boolean) => set((state: SingleViewStore) => ({...state, showDetails: show})),
   setShowAnnotations: (show: boolean) => set((state: SingleViewStore) => ({...state, showAnnotations: show})),
   setShowNavigation: (show: boolean) => set((state: SingleViewStore) => ({...state, showNavigation: show})),
+  setIsSlideshowActive: (active: boolean) => set((state) => ({ ...state, isSlideshowActive: active })),
+  setHideNavigation: (hide: boolean) => set((state) => ({ ...state, hideNavigation: hide })),
+  setShuffledIndex: (shuffledIndex: number) => set((state: SingleViewStore) => ({...state, shuffledIndex})),
+  setShuffledIndices: (indices: number[]) => set((state) => ({ ...state, shuffledIndices: indices })),
 }), {
   name: 'gallery-single-view',
   partialize: excludeStateProps(['lastId', 'lastIndex']),
