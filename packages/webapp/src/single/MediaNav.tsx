@@ -58,13 +58,6 @@ export const MediaNav = ({current, prev, next, listLocation, showNavigation, dis
 
   return (
     <>
-      <div className={classNames('absolute z-10 top-4 right-4 flex gap-2')}>
-        {!appConfig.removedViewerStream &&
-          <a onClick={() => dispatch({type: 'list'})} className={classNames(buttonClass, itemClass, 'bg-transparent hover:bg-gray-400/40')} title="Show media stream (ESC)">
-            <FontAwesomeIcon icon={icons.faXmark} className={iconClass}/>
-          </a>
-        }
-      </div>
       {!appConfig.removedViewerNav && prev &&
         <div className={classNames('absolute z-10 left-4 top-1/2 -translate-y-1/2', itemClass)}>
           <a onClick={() => dispatch({type: 'prev'})} className={classNames(buttonClass, buttonBgClass)} title="Show previous media (left arrow)">
