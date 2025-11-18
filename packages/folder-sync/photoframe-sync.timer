@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Photoframe Sync periodically
+
+[Timer]
+OnUnitActiveSec=30
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

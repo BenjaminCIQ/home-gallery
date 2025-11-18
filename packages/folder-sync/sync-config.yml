@@ -1,0 +1,48 @@
+# Where symlinks will be created
+dest_root: /mnt/photoframe/dest
+
+# Quarantine for unwanted files (only used if a source enables it)
+quarantine_root: /mnt/photoframe/quarantine
+
+# Global lockfile and state DB
+
+# Disable sync progress bar
+disable_progress: false
+
+# Global media extensions
+media_ext:
+  images: [jpg, jpeg, png, gif, webp, bmp, tiff]
+  videos: [mp4, mov, mkv, avi, mpg, mpeg, webm]
+
+# Nextcloud connection details (only needed if any source uses nextcloud_tag)
+nextcloud:
+  base_data_path: /var/www/nextcloud/data/USERNAME/files  # local data directory
+  ocs_url: http://localhost/ocs/v2.php/apps/files
+  username: USERNAME
+  app_password: YOUR_APP_PASSWORD
+
+# -------------------------------------------------------------------
+# Sources list (you can define any number of entries)
+# -------------------------------------------------------------------
+sources:
+
+  # 1. Example: Local folder that enforces media filtering AND quarantine
+  - name: A
+    type: local
+    path: /mnt/sources/A
+    filter_media: true       # only sync images/videos
+    quarantine: true         # move other files to quarantine
+
+  # 2. Example: Local folder with no special rules
+  - name: B
+    type: local
+    path: /mnt/sources/B
+    filter_media: false
+    quarantine: false
+
+  # 3. Example: Nextcloud source based on tag
+  - name: cloud_photos
+    type: nextcloud_tag
+    tag: PhotoFrame          # the Nextcloud tag to pull from
+    filter_media: false      # optional — probably not needed
+    quarantine: false        # never used for cloud sources
