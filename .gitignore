@@ -1,5 +1,6 @@
 .cache
 .vscode
+.kanbn/
 .nyc_output
 .tap
 build
@@ -15,3 +16,4 @@ gallery.config.yml
 latest-e2e
 *.tsbuildinfo
 brun.sh
+packages/folder-sync/venv/
