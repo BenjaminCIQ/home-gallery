@@ -15,6 +15,7 @@ const log = Logger('server.api.database');
 export async function databaseApi(context) {
   const { config, eventbus, router, events: { read: getEvents }, executeQuery } = context
   const databaseFilename = config.database.file
+  const eventsFileName = config.events.file
   let database = false;
   const databaseCache = cache(3600);
   let entryCache = {};
@@ -66,7 +67,7 @@ export async function databaseApi(context) {
       log.warn(`Received a user action event without a database. Skip event merging for database`);
       return
     }
-    const changedEntries = applyEvents(database, [event])
+    const changedEntries = applyEvents(database, [event], eventsFileName)
     if (!changedEntries.length) {
       log.debug(`Event did not change current database`);
       return

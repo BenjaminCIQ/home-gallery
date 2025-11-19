@@ -42,7 +42,7 @@ const wait = (filename, delay, cb) => {
   })
 }
 
-const mergeEvents = (database, getEvents, cb) => {
+const mergeEvents = (database, getEvents, eventsFileName, cb) => {
   getEvents((err, events) => {
     if ((err && err.code == 'ENOENT')) {
       cb(null, database)
@@ -51,14 +51,14 @@ const mergeEvents = (database, getEvents, cb) => {
       cb(null, database)
     } else {
       const t0 = Date.now()
-      const changedEntries = applyEvents(database, events.data)
+      const changedEntries = applyEvents(database, events.data, eventsFileName)
       log.debug(t0, `Applied ${events.data.length} events to ${changedEntries.length} of ${database.data.length} database entries`)
       cb(null, database)
     }
   })
 }
 
-export function waitReadWatch(filename, getEvents, cb) {
+export function waitReadWatch(filename, getEvents, eventsFileName, cb) {
   const onChange = () => {
     exists(filename, (err, hasFile) => {
       if (err) {
@@ -77,7 +77,7 @@ export function waitReadWatch(filename, getEvents, cb) {
       if (err) {
         return cb(err);
       }
-      mergeEvents(database, getEvents, (err, database) => {
+      mergeEvents(database, getEvents, eventsFileName, (err, database) => {
         if (err) {
           return cb(err)
         }

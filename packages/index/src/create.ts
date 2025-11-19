@@ -36,6 +36,7 @@ export async function createIndex(dir: string, options: IIndexOptions): Promise<
     const entry: IIndexEntry  = Object.assign({}, stat, {
       created: new Date().toISOString(),
       filename: relativeFilename,
+      filepath: filename,
       sha1sum: '',
       sha1sumDate: null,
       isDirectory: stat.isDirectory(),

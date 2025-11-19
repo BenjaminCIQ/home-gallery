@@ -3,7 +3,7 @@ import { createReadStream } from 'fs'
 import { map } from '@home-gallery/stream';
 import { getFileTypeByExtension } from '@home-gallery/common';
 
-export const mapToStorageEntry = map(({sha1sum, size, mtime, mtimeMs, indexName, url, filename}) => {
+export const mapToStorageEntry = map(({sha1sum, size, mtime, mtimeMs, indexName, url, filename, filepath}) => {
   const type = getFileTypeByExtension(filename);
   const date = mtime || new Date(mtimeMs);
 
@@ -15,6 +15,7 @@ export const mapToStorageEntry = map(({sha1sum, size, mtime, mtimeMs, indexName,
   return {
     indexName,
     filename,
+    filepath,
     size,
     date,
     type,

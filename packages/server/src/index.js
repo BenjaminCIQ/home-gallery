@@ -105,7 +105,7 @@ export async function startServer(options) {
           args.push('--watch')
         }
         const watcher = spawnCli(args, getConfigEnv(options))
-        context.processManager.addProcess(watcher, 15 * 1000)
+        context.processManager.addProcess(watcher, 1 * 1000)
       }
       if (openBrowser) {
         log.debug(`Open browser with url ${url}`)

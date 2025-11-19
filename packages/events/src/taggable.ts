@@ -3,4 +3,7 @@ export interface Taggable {
   updated?: string;
   tags?: string[];
   appliedEventIds?: string[];
+  files?: ({
+    filepath: string;
+  } & Record<string, unknown>)[];
 }

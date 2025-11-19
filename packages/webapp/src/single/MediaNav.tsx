@@ -1,9 +1,9 @@
-import * as React from "react";
 import { useEffect } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import * as icons from '@fortawesome/free-solid-svg-icons'
 
 import { useSearchStore } from "../store/search-store";
+import { useSingleViewStore } from "../store/single-view-store";
 import { useAppConfig } from "../config/useAppConfig";
 
 import { getHigherPreviewUrl, getLowerPreviewUrl } from '../utils/preview'
@@ -11,11 +11,12 @@ import { usePreviewSize } from "./usePreviewSize";
 import { classNames } from '../utils/class-names'
 import { MediaViewDisableFlags } from "./MediaViewPage";
 
-export const MediaNav = ({current, prev, next, listLocation, showNavigation, dispatch}) => {
+export const MediaNav = ({current, prev, next, listLocation, dispatch}) => {
   const query = useSearchStore(state => state.query);
   const previewSize = usePreviewSize()
   const appConfig = useAppConfig()
   const diabledFlags = appConfig.pages?.mediaView?.disabled || [] as MediaViewDisableFlags
+  const isSlideshowActive = useSingleViewStore(state => state.isSlideshowActive)
 
   const loadImage = async (url: string | false) => {
     return new Promise((resolve) => {
@@ -58,14 +59,7 @@ export const MediaNav = ({current, prev, next, listLocation, showNavigation, dis
 
   return (
     <>
-      <div className={classNames('absolute z-10 top-4 right-4 flex gap-2')}>
-        {!diabledFlags?.includes('nav') && 
-          <a onClick={() => dispatch({type: 'list'})} className={classNames(buttonClass, itemClass, 'bg-transparent hover:bg-gray-400/40')} title="Show media stream (ESC)">
-            <FontAwesomeIcon icon={icons.faXmark} className={iconClass}/>
-          </a>
-        }
-      </div>
-      {!diabledFlags?.includes('nav') && prev &&
+      {!appConfig.removedViewerNav && prev &&
         <div className={classNames('absolute z-10 left-4 top-1/2 -translate-y-1/2', itemClass)}>
           <a onClick={() => dispatch({type: 'prev'})} className={classNames(buttonClass, buttonBgClass)} title="Show previous media (left arrow)">
             <FontAwesomeIcon icon={icons.faChevronLeft} className={iconClass}/>
@@ -80,7 +74,10 @@ export const MediaNav = ({current, prev, next, listLocation, showNavigation, dis
         </div>
       }
       <div className={classNames('absolute z-10 bottom-4 left-1/2 -translate-x-1/2 flex gap-2')}>
-        {!diabledFlags.includes('nav') && listLocation &&
+        <a onClick={() => dispatch({type: 'toggleSlideshow'})} className={classNames(buttonClass, buttonBgClass, itemClass, isSlideshowActive && 'bg-blue-600 text-white')} title={isSlideshowActive ? 'Stop slideshow (space)' : 'Start slideshow (space)'}>
+          <FontAwesomeIcon icon={isSlideshowActive ? icons.faPause : icons.faPlay} className={iconClass} />
+        </a>
+        {!appConfig.removedViewerStream && listLocation &&
           <a onClick={() => dispatch({type: 'list'})} className={classNames(buttonClass, buttonBgClass, itemClass)} title="Show media stream (ESC)">
             <FontAwesomeIcon icon={icons.faTh} className={iconClass}/>
           </a>

@@ -18,6 +18,8 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
   const timeFormat = appConfig.format?.time || '%H:%M:%S'
   const {openDialog, setDialogVisible} = useTagDialog()
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+
   if (!entry) {
     return (<></>)
   }
@@ -151,7 +153,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
             <FontAwesomeIcon icon={icons.faXmark} className="text-gray-700 hover:text-gray-400 active:text-gray-200"/>
           </a>
         </div>
-        <div className="flex flex-col gap-6 text-gray-500">
+        <div className="flex flex-col gap-6 text-gray-500" style={{minHeight: "90vh"}}>
           <div className="flex">
             <div className="w-8">
               <FontAwesomeIcon icon={icons.faIdCard} className="text-gray-300"/>
@@ -184,7 +186,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
             <div>
               {entry.files.map(mapFile).map(l => (
                 <>
-                  <p>{l}</p>
+                <p>{l}</p>
                 </>
               ))}
             </div>
@@ -212,14 +214,14 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
           )}
           { !!entry.description && (
             <>
-              <div className="flex">
-                <div className="flex-shrink-0 w-8">
-                  <FontAwesomeIcon icon={icons.faNewspaper} className="text-gray-300"/>
-                </div>
-                <div>
-                  <p className="inline-flex flex-wrap gap-2">{entry.description}</p>
-                </div>
+            <div className="flex">
+              <div className="flex-shrink-0 w-8">
+                <FontAwesomeIcon icon={icons.faNewspaper} className="text-gray-300"/>
               </div>
+              <div>
+                <p className="inline-flex flex-wrap gap-2">{entry.description}</p>
+              </div>
+            </div>
             </>
           )}
           <div className="flex">
@@ -268,7 +270,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
               </div>
               <div>
                 <p className="inline-flex flex-wrap gap-2">{entry.objects.map(object => (
-                  <span>{simpleSearchLink(object.class)} ({object.score})</span>
+                    <span>{simpleSearchLink(object.class)} ({object.score})</span>
                 ))}</p>
               </div>
             </div>
@@ -280,11 +282,12 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
               </div>
               <div>
                 <p className="inline-flex flex-wrap gap-2">{entry.faces.map(face => (
-                  <span>{face.gender} (~{face.age.toFixed()}y)</span>
+                    <span>{face.gender} (~{face.age.toFixed()}y)</span>
                 ))}</p>
               </div>
             </div>
           )}
+
           <div className="flex">
             <div className="flex-shrink-0 w-8">
               <FontAwesomeIcon icon={icons.faShareNodes} className="text-gray-300"/>
@@ -297,8 +300,60 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
               </p>
             </div>
           </div>
+
+          <div className="flex-grow"></div>
+
+          {/* ------------------------ */}
+          {/* NEW DELETE BUTTON BELOW */}
+          {/* ------------------------ */}
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 text-red-400 border border-red-600 rounded hover:bg-red-700/40 hover:text-red-200"
+              title="Delete this media"
+            >
+              <FontAwesomeIcon icon={icons.faTrash} />
+              Delete
+            </button>
+          </div>
+
+
         </div>
       </div>
+
+      {/* ------------------------ */}
+      {/* DELETE CONFIRMATION POPUP */}
+      {/* ------------------------ */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded shadow-lg text-gray-300 w-80">
+            <h2 className="text-lg mb-4">Confirm Delete</h2>
+            <p className="mb-6">Are you sure you want to delete this image?</p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-500"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => {
+                  dispatch({ type: 'deleteEntry', id: entry.id });
+                  setShowDeleteConfirm(false);
+                  dispatch({ type: 'toggleDetails', fromSlideshow: false });
+                  dispatch({ type: 'next', fromSlideshow: false });
+                }}
+                className="px-3 py-1 rounded bg-red-600 hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   )
 }
