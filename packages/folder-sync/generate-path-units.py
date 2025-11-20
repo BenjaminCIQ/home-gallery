@@ -21,7 +21,7 @@ def main():
         name = source['name']
         folder = source['path']
 
-        path_unit = Path(args.output_dir) / f"photoframe-sync-{name}.path"
+        path_unit = Path(args.output_dir) / f"photoframe-sync@{name}.path"
 
         content = f"[Unit]\nDescription=Watch local source '{name}' for Photoframe Sync\n\n[Path]\nPathModified={folder}\n\n[Install]\nWantedBy=multi-user.target"
 

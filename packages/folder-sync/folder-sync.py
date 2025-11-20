@@ -451,14 +451,15 @@ def main() -> None:
         raise
 
     # Load sources
-    if args.source:
+    if not args.source or args.source == 'timer':
+        sources = config["sources"]
+        print(f"folder-sync called for: {args.source}")
+    else:
         matching = [s for s in config["sources"] if s["name"] == args.source]
         if not matching:
             print(f"[ERROR] No source named '{args.source}'")
             return
         sources = matching
-    else:
-        sources = config["sources"]
 
     # DB
     db_path = Path(config.get("state_db", "folder-sync.db")).expanduser()

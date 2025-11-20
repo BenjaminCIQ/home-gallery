@@ -5,9 +5,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=photoframe
-Group=photoframe
+User=user
+Group=user
 # The "%i" will be filled with instance name (from .path)
-ExecStart=/usr/bin/env python3 /path/to/folder-sync.py -c /etc/photoframe/config.yml -s %i
+ExecStart=/usr/bin/env python3 /path/to/folder-sync.py -c /path/to/sync-config.yml -s %i
 StandardOutput=journal
 StandardError=journal

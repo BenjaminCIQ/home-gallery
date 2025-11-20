@@ -20,6 +20,8 @@ SERVICE_TEMPLATE="$BASE_DIR/photoframe-sync@.service"
 TIMER_UNIT="$BASE_DIR/photoframe-sync.timer"
 PATH_GENERATOR="$BASE_DIR/generate-path-units.py"
 SYNC_SCRIPT="$BASE_DIR/folder-sync.py"
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_GROUP=$(id -gn "$REAL_USER")
 
 echo "Base directory: $BASE_DIR"
 echo "Config file: $CONFIG_FILE"
@@ -50,10 +52,18 @@ echo "Generating path units..."
 echo "Installing service template..."
 cp "$SERVICE_TEMPLATE" "$SYSTEMD_DIR/photoframe-sync@.service"
 
-echo "Updating ExecStart..."
+echo "Updating ExecStart, User and Group..."
 sed -i.bak \
-    "s|^ExecStart=.*|ExecStart=$VENV_DIR/bin/python3 $SYNC_SCRIPT -c $CONFIG_FILE -s %i|" \
-    "$SYSTEMD_DIR/photoframe-sync@.service"
+    "s@^ExecStart=.*@ExecStart=$VENV_DIR/bin/python3 $SYNC_SCRIPT -c $CONFIG_FILE -s %i@" \
+    "$SERVICE_TEMPLATE"
+
+sed -i \
+    "s/^User=.*/User=$REAL_USER/" \
+    "$SERVICE_TEMPLATE"
+
+sed -i \
+    "s/^Group=.*/Group=$REAL_GROUP/" \
+    "$SERVICE_TEMPLATE"
 
 # ============================================================
 # 5. Install timer
@@ -85,6 +95,7 @@ systemctl daemon-reload
 echo "Enabling and starting timer..."
 systemctl enable photoframe-sync.timer
 systemctl start  photoframe-sync.timer
+sudo systemctl start photoframe-sync@timer.service
 
 echo "Setup complete!"
 echo "All system-level units installed, enabled, and running."
