@@ -27,7 +27,7 @@ import { classNames } from '../utils/class-names'
 import { SingleTagDialogProvider } from "../dialog/tag-dialog-provider";
 import { useMediaViewHotkeys } from "./useMediaViewHotkeys";
 import { MediaViewDisableFlags } from "./MediaViewPage";
-//import { SettingsMenu } from "./SettingsMenu";
+import { SettingsMenu } from "./SettingsMenu";
 
 const log = Logger('MediaView')
 
@@ -401,12 +401,12 @@ export const MediaView = () => {
                 <MediaViewUnknownType key={key} media={current} next={next} prev={prev}/>
               }
 
-              {/* {!hideNavigation && showNavigation &&
+              {!hideNavigation && showNavigation &&
                 <SettingsMenu
                   settingsOpen={settingsOpen}
                   setSettingsOpen={setSettingsOpen}
                 />
-              } */}
+              }
             </div>
           </div>
           { showDetails &&
