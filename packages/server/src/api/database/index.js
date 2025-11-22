@@ -80,7 +80,7 @@ export async function databaseApi(context) {
     })
   })
 
-  waitReadWatch(databaseFilename, getEvents, (err, newDatabase) => {
+  waitReadWatch(databaseFilename, getEvents, '', (err, newDatabase) => {
     if (err) {
       log.error(err, `Could not read database file ${databaseFilename}: ${err}`)
       return

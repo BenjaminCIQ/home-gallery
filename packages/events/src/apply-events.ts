@@ -60,7 +60,7 @@ const flattenReducer = (result: Taggable[], entry: Taggable[]) => {
   return result
 }
 
-export const applyEvents = (entries: Taggable[], events: Event[]): Taggable[] => {
+export const applyEvents = (entries: Taggable[], events: Event[], eventsFileName: any): Taggable[] => {
   // on server side duplicated entries ids may exists
   const id2Entries: EntryIdMap = entries.reduce(idMapReducer, {} as EntryIdMap)
 
