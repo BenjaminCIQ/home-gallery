@@ -21,7 +21,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', updated: '2022-02-22', tags: ['foo'], appliedEventIds: ['5']}]);
     t.same(entries[0], result[0]);
   });
@@ -42,7 +42,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', updated: '2022-02-22', tags: ['foo'], appliedEventIds: ['5']}, {id: '1', updated: '2022-02-22', tags: ['foo'], appliedEventIds: ['5']}]);
     t.same(entries[0], result[0]);
   });
@@ -67,7 +67,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', updated: '2022-03-06', tags: ['foo', 'bar'], appliedEventIds: ['6']}]);
     t.same(entries[0], result[0]);
   });
@@ -87,7 +87,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', updated: '2022-02-22', tags: ['bar'], appliedEventIds: ['7']}]);
     t.same(entries[0], result[0]);
   });
@@ -112,7 +112,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', updated: '2022-02-22', tags: [], appliedEventIds: ['8']}]);
     t.same(entries[0], result[0]);
   });
@@ -133,7 +133,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, []);
     t.same(entries[0], {id: '1', updated: '2022-01-01', tags: ['foo'], appliedEventIds: ['9']});
   });
@@ -154,7 +154,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, []);
     t.same(entries[0], {id: '1', updated: '2022-01-01', tags: ['foo'], appliedEventIds: ['10']});
   });
@@ -178,7 +178,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result, [{id: '1', tags: [], appliedEventIds: ['8']}]);
     t.same(entries[0], result[0]);
   });
@@ -209,7 +209,7 @@ t.test('applyEvents()', async t => {
         ]
       }
     ]
-    const result = applyEvents(entries, events);
+    const result = applyEvents(entries, events, '');
     t.same(result.length, 1);
   });
 });

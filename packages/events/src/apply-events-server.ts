@@ -1,8 +1,12 @@
+import fs from "fs"
+import { PathLike } from 'fs';
 import { Event, EventAction } from './models.js';
 
 import { Taggable } from './taggable.js';
 
-const applyEventAction = <T extends Taggable>(data: T, action: EventAction): boolean => {
+import { removeEvent } from './remove-event.js'
+
+const applyEventAction = <T extends Taggable>(data: T, action: EventAction, event: Event, eventsFileName: PathLike): boolean => {
   let changed = false;
   switch (action.action) {
     case 'addTag': {
@@ -23,6 +27,19 @@ const applyEventAction = <T extends Taggable>(data: T, action: EventAction): boo
       if (index >= 0) {
         data.tags.splice(index, 1);
         changed = true;
+      }
+      break;
+    }
+    case 'delete': {
+      if (!data.files || !data.files.length) {
+        return false;
+      }
+      const filePath = data.files[0].filepath
+      try {
+        fs.unlinkSync(filePath);
+        removeEvent(eventsFileName, event)
+      } catch (err) {
+        console.error("Error deleting file:", err);
       }
       break;
     }
@@ -60,7 +77,7 @@ const flattenReducer = (result: Taggable[], entry: Taggable[]) => {
   return result
 }
 
-export const applyEvents = (entries: Taggable[], events: Event[], eventsFileName: any): Taggable[] => {
+export const applyEvents = (entries: Taggable[], events: Event[], eventsFilename: PathLike): Taggable[] => {
   // on server side duplicated entries ids may exists
   const id2Entries: EntryIdMap = entries.reduce(idMapReducer, {} as EntryIdMap)
 
@@ -76,7 +93,7 @@ export const applyEvents = (entries: Taggable[], events: Event[], eventsFileName
     targetEntries.forEach(entry => {
       let changed = false;
       event.actions.forEach(action => {
-        changed = applyEventAction(entry, action) || changed;
+        changed = applyEventAction(entry, action, event, eventsFilename) || changed;
       });
 
       if (!entry.appliedEventIds) {
