@@ -6,7 +6,7 @@ export const MediaViewUnknownType = (props) => {
   return (
     <>
       <div className="mediaView">
-        <h1>Unsopported Media type {type} of {id}</h1>
+        <h1>Unsupported Media type {type} of {id}</h1>
       </div>
     </>
   )

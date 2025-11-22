@@ -8,6 +8,13 @@ const defaultConfig: AppConfig = {
     plugins: []
   },
   entries: [],
+  slideshow: {
+    interval: 5000,
+    naviTimeout: 3000,
+    timeout: 10000,
+    random: true,
+    loop: true,
+  }
 }
 
 export const useAppConfig = () => {
@@ -19,11 +26,17 @@ export const useAppConfig = () => {
       ...injectedConfig.pluginManager
     }
 
+    const slideshow = {
+      ...defaultConfig.slideshow,
+      ...injectedConfig.slideshow
+    };
+
     const result = {
       ...defaultConfig,
       ...injectedConfig,
-      pluginManager
-    }
+      pluginManager,
+      slideshow
+    };
 
     const searchParams = new URLSearchParams(location.search?.substring(1) || '')
     result.disabled.push(...searchParams.getAll('disabled').filter(v => !!v))

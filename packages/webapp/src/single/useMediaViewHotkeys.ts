@@ -47,7 +47,7 @@ export function useMediaViewHotkeys() {
         action: 'last'
       },
       {
-        keys: ['esc'],
+        keys: ['escape'],
         action: 'list',
         disabled: disabledFlags.includes('nav')
       },

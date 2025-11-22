@@ -21,12 +21,13 @@ const containsSize = (containerWidth, containerHeight, childWidth, childHeight) 
 type ZoomableProps = {
   childWidth: number;
   childHeight: number;
+  dispatch: (action: any) => void;
   onSwipe?: (ev: HammerInput) => void
   onZoom?: (zoomFactor: number) => void
   children: React.ReactElement
 }
 
-export const Zoomable: FunctionComponent<ZoomableProps> = ({childWidth, childHeight, onSwipe, onZoom, children}) => {
+export const Zoomable: FunctionComponent<ZoomableProps> = ({childWidth, childHeight, dispatch, onSwipe, onZoom, children}) => {
   const ref = useRef<HTMLDivElement>();
   const [style, setStyle] = useState({});
   const clientRect = useClientRect(ref);
@@ -117,6 +118,11 @@ export const Zoomable: FunctionComponent<ZoomableProps> = ({childWidth, childHei
       }
     }
 
+    const onTapHandler = (ev) => {
+      dispatch({ type: 'toggleNavigation', fromSlideshow: true })
+      ev.preventDefault()
+    }
+
     const onDoubleTapHandler = (ev) => {
       if (transform.scale > 1.5) {
         resetElement();
@@ -157,7 +163,7 @@ export const Zoomable: FunctionComponent<ZoomableProps> = ({childWidth, childHei
     mc.on("panstart panmove", onPanHandler);
     mc.on("pinchstart pinchmove", onPinchHandler);
     mc.on("swipe", onSwipeHandler);
-    //mc.on("tap", onTap);
+    mc.on("tap", onTapHandler);
     mc.on("doubletap", onDoubleTapHandler);
 
     mc.on("hammer.input", (ev) => {

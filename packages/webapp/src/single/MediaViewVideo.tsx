@@ -7,7 +7,7 @@ import { usePreviewSize } from "./usePreviewSize";
 import { classNames } from "../utils/class-names";
 
 export const MediaViewVideo = (props) => {
-  const { media, dispatch } = props
+  const { media, dispatch, isSlideShowActive } = props
   const { previews } = media;
   const [isPlaying, setIsPlaying] = useState(false)
   const ref = useRef()
@@ -41,7 +41,21 @@ export const MediaViewVideo = (props) => {
       e.removeEventListener('pause', onPause)
       e.removeEventListener('play', onPlay)
     }
-  }, [ref])
+  }, [ref, dispatch])
+
+  // Autoplay if slideshow is active
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return
+
+    if (isSlideShowActive) {
+      video.play().then(() => setIsPlaying(true))
+        .catch(err => console.warn("Autoplay failed:", err))
+    } else {
+      video.pause()
+      setIsPlaying(false)
+    }
+  }, [isSlideShowActive])
 
   useEffect(() => {
     const video: HTMLMediaElement = ref.current;
@@ -64,23 +78,17 @@ export const MediaViewVideo = (props) => {
       }
     }
 
-    const onTapHandler = (ev) => {
-      if (!video.paused) {
-        return
-      }
-
-      ev.preventDefault()
-
-      setIsPlaying(true)
-      video.play()
-    }
+    // const onTapHandler = (ev) => {
+    //   dispatch({type: 'toggleNavigation'})
+    //   ev.preventDefault()
+    // }
 
     const mc = new Hammer.Manager(overlay)
     mc.add(new Hammer.Swipe())
     mc.add(new Hammer.Tap());
 
     mc.on("swipe", onSwipeHandler)
-    mc.on("tap", onTapHandler)
+    // mc.on("tap", onTapHandler)
 
     return () => {
       mc.stop(false)
