@@ -1,13 +1,14 @@
 import { map } from '@home-gallery/stream';
 import { getFileTypeByExtension } from '@home-gallery/common';
 
-export const mapToDatabaseEntry = map(({sha1sum, size, mtime, mtimeMs, url, indexName, filename}) => {
+export const mapToDatabaseEntry = map(({sha1sum, size, mtime, mtimeMs, url, indexName, filename, filepath}) => {
   const type = getFileTypeByExtension(filename);
   const date = mtime || new Date(mtimeMs);
 
   return {
     indexName,
     filename,
+    filepath,
     size,
     date,
     type,

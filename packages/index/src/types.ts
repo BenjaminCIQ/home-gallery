@@ -4,6 +4,7 @@ export type IIndexEntry = {
   dev: number
   ino: number
   filename: string
+  filepath: string
   size: number
   ctimeMs: number
   created: string

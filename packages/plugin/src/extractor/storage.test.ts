@@ -289,6 +289,7 @@ function createEntry(sha1sum: string, partial: Partial<TStorageEntry> = {}): TSt
   return {
     indexName: 'index',
     filename: 'IMG_1234.jpg',
+    filepath: '/IMG_1234.jpg',
     type: 'image',
     size: 1024,
     date: '2024-06-03T22:17:47Z',

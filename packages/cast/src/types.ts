@@ -6,6 +6,7 @@ export type TDatabaseEntry = {
     id: string,
     index: number,
     filename: string,
+    filepath: string
   }[],
   previews: string[],
 }

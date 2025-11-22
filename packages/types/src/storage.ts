@@ -72,6 +72,10 @@ export type TStorageEntry = {
    */
   filename: string
   /**
+   * Absolute filepath
+   */
+  filepath: string
+  /**
    * File size in bytes
    */
   size: number
