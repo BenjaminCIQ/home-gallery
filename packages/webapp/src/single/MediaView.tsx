@@ -83,7 +83,7 @@ export const MediaView = () => {
   const isSlideshowActive = useSingleViewStore(state => state.isSlideshowActive)
   const setIsSlideshowActive = useSingleViewStore(actions => actions.setIsSlideshowActive)
 
-  const hideNavigation = useSingleViewStore(state => state.hideNavigation)
+  const hideNavigation = false//useSingleViewStore(state => state.hideNavigation)
   const setHideNavigation = useSingleViewStore(actions => actions.setHideNavigation)
 
   const getState = useSingleViewStore.getState;
