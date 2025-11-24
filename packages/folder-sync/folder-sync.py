@@ -25,6 +25,7 @@ import errno
 import requests
 from typing import Dict, List, Tuple, Optional
 from tqdm import tqdm
+from xml.etree import ElementTree as ET
 
 
 # ===============================================================
@@ -111,6 +112,26 @@ def apply_file_action(ap: Path, dest: Path, quarantined: bool) -> None:
             os.symlink(str(ap), str(dest))
 
 
+def get_files_with_tag_local(config: dict, folder_path: str) -> List[str]:
+    """
+    Given a list of paths that are tagged (files or folders),
+    return a flat list of file paths filtered by media_ext.
+    If a path is a folder, recursively include all matching files.
+    """
+
+    media_exts = [ext.lower() for ext in config['media_ext']['images'] + config['media_ext']['videos']]
+    result_files = []
+
+    if Path(folder_path).is_dir():
+        # Recursively glob files in folder
+        for file_path in Path(folder_path).rglob("*"):
+            if file_path.is_file() and file_path.suffix[1:].lower() in media_exts:
+                result_files.append(str(file_path))
+        # skip paths that do not exist
+
+    return result_files
+
+
 # ===============================================================
 # SQLite State DB
 # ===============================================================
@@ -129,7 +150,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             exists_in_source INTEGER,
             exists_in_dest INTEGER,
             last_check INTEGER,
-            quarantined INTEGER
+            quarantined INTEGER,
+            active INTEGER
         );
     """)
     conn.commit()
@@ -146,78 +168,122 @@ def upsert_file_record(cur: sqlite3.Cursor, db_row: Optional[Tuple[int, int, int
         cur.execute("""
             INSERT INTO files
             (source_name, source_type, source_path, relative_path,
-             mtime, size, exists_in_source, exists_in_dest, last_check, quarantined)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (source_name, source_type, str(ap), str(rp), mtime, size, 1, 0, now, int(quarantined)))                                                                            
+             mtime, size, exists_in_source, exists_in_dest, last_check, quarantined, active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (source_name, source_type, str(ap), str(rp), mtime, size, 1, 0, now, int(quarantined), 1))                                                                            
     else:
         cur.execute("""
             UPDATE files
-            SET mtime=?, size=?, exists_in_source=1, last_check=?, quarantined=?
+            SET mtime=?, size=?, exists_in_source=1, last_check=?, quarantined=?, active=?
             WHERE source_path=?
-        """, (mtime, size, now, int(quarantined), str(ap)))
+        """, (mtime, size, now, int(quarantined), 0, 1, str(ap)))
 
 
 # ===============================================================
 # Nextcloud API
 # ===============================================================
-
 def nc_tag_id(config: dict, tag_name: str) -> Optional[str]:
-    """Return Nextcloud tag ID."""
-    base = config["nextcloud"]["webdav_base"]
-    auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
-    url = f"{base}/systemtags/"
+    """
+    Return Nextcloud tag ID using WebDAV.
+    Scans /systemtags-assigned/image to find the tag with the given display-name.
+    """
 
-    r = requests.request("PROPFIND", url, auth=auth)
+    base = config["nextcloud"]["server_ip"].rstrip("/")  # e.g. http://ip_addr
+    auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
+
+    url = f"{base}/nextcloud/remote.php/dav/systemtags-assigned/image"
+
+    # XML body specifying the properties we want
+    xml_body = '''<?xml version="1.0"?>
+<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+  <d:prop>
+    <oc:id/>            
+    <oc:display-name/> 
+    <oc:user-visible/>
+    <oc:user-assignable/>
+    <oc:can-assign/>
+    <nc:files-assigned/>
+    <nc:reference-fileid/>                 
+  </d:prop>         
+</d:propfind>'''
+
+    headers = {"Content-Type": "text/xml", "Depth": "1"}  # Depth:1 to list immediate children
+
+    # Send PROPFIND with XML body
+    r = requests.request("PROPFIND", url, auth=auth, headers=headers, data=xml_body)
     r.raise_for_status()
 
-    for block in r.text.split("<d:response>"):
-        if f"<oc:display-name>{tag_name}</oc:display-name>" in block:
-            if "<oc:id>" in block:
-                return block.split("<oc:id>")[1].split("</oc:id>")[0].strip()
+    # Parse XML response
+    root = ET.fromstring(r.content)
+
+    ns = {
+        "d": "DAV:",
+        "oc": "http://owncloud.org/ns",
+        "nc": "http://nextcloud.org/ns"
+    }
+
+    # Iterate over all <d:response> elements
+    for response in root.findall("d:response", ns):
+        display_name_el = response.find(".//oc:display-name", ns)
+        id_el = response.find(".//oc:id", ns)
+        if display_name_el is not None and id_el is not None:
+            if display_name_el.text == tag_name:
+                return id_el.text.strip()
 
     return None
 
 
-def nc_tag_relations(config: dict, tag_id: str) -> List[str]:
-    """Return list of node IDs associated with a tag."""
-    base = config["nextcloud"]["webdav_base"]
-    auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
-    url = f"{base}/systemtags-relations/{tag_id}/"
 
-    r = requests.request("PROPFIND", url, auth=auth)
+def get_files_with_tag(config: dict, tag_id: int) -> List[str]:
+    """
+    Return a list of file paths for all files assigned the given tag_id.
+    If a path is a folder, recursively glob files according to media_ext config.
+    """
+
+    base = config["nextcloud"]["server_ip"].rstrip("/")  # e.g. http://ip_addr
+    auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
+    user_root = f"{base}/nextcloud/remote.php/dav/files/{config['nextcloud']['username']}/"
+
+    # WebDAV REPORT body for filtering files by systemtag
+    xml_body = f'''<?xml version="1.0"?>
+<oc:filter-files xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns" xmlns:ocs="http://open-collaboration-services.org/ns">
+  <d:prop>
+    <d:getlastmodified/>
+    <d:getcontenttype/>
+    <d:displayname/>
+    <d:getetag/>
+  </d:prop>
+  <oc:filter-rules>
+    <oc:systemtag>{tag_id}</oc:systemtag>
+  </oc:filter-rules>
+</oc:filter-files>'''
+
+    headers = {"Content-Type": "application/xml", "Depth": "infinity"}
+    r = requests.request("REPORT", user_root, auth=auth, headers=headers, data=xml_body)
     r.raise_for_status()
 
-    ids: List[str] = []
-    for block in r.text.split("<d:response>"):
-        if "<oc:id>" in block:
-            nid = block.split("<oc:id>")[1].split("</oc:id>")[0].strip()
-            ids.append(nid)
-    return ids
+    # Parse XML response
+    root = ET.fromstring(r.content)
 
+    ns = {
+    "d": "DAV:",
+    "oc": "http://owncloud.org/ns",
+    "nc": "http://nextcloud.org/ns"
+    }
 
-def nc_node_meta(config: dict, node_id: str) -> Tuple[Optional[Path], Optional[bool]]:
-    """
-    Returns (absolute local path, is_dir)
-    """
-    base = config["nextcloud"]["webdav_base"]
-    auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
-    local_root = Path(config["nextcloud"]["local_data_root"])
+    # Collect all paths (files and folders)
+    paths = []
+    for resp in root.findall("d:response", ns):
+        href_el = resp.find("d:href", ns)
+        prop_el = resp.find("d:propstat/d:prop", ns)
+        if href_el is None or prop_el is None:
+            continue
 
-    meta_url = f"{base}/meta/{node_id}/v"
-    r = requests.request("PROPFIND", meta_url, auth=auth)
+        href = href_el.text
+        paths.append(href)
 
-    if r.status_code >= 400:
-        return None, None
-
-    xml = r.text
-
-    if "<oc:meta-path>" not in xml:
-        return None, None
-
-    relative = xml.split("<oc:meta-path>")[1].split("</oc:meta-path>")[0].strip()
-    is_dir = "<d:collection/>" in xml
-
-    return local_root / relative, is_dir
+    paths = [x.partition(f"/nextcloud/remote.php/dav/files/{config['nextcloud']['username']}/")[-1] for x in paths]
+    return paths
 
 
 def gather_nc_tagged(config: dict, tag_name: str) -> List[str]:
@@ -226,23 +292,10 @@ def gather_nc_tagged(config: dict, tag_name: str) -> List[str]:
     if not tagid:
         print(f"[WARN] Tag '{tag_name}' not found in Nextcloud")
         return []
+    
+    print(tagid)
 
-    node_ids = nc_tag_relations(config, tagid)
-    results: List[str] = []
-
-    for nid in node_ids:
-        path, is_dir = nc_node_meta(config, nid)
-        if not path or not path.exists():
-            continue
-
-        if is_dir:
-            for root, _, files in os.walk(path):
-                for f in files:
-                    results.append(str(Path(root) / f))
-        else:
-            results.append(str(path))
-
-    return results
+    return get_files_with_tag(config, tagid)
 
 
 # ===============================================================
@@ -266,19 +319,28 @@ def gather_entries(config: dict, source: dict) -> List[Tuple[Path, Path, int, in
                 st = ap.stat()
                 entries.append((ap, rp, int(st.st_mtime), st.st_size))
 
-    elif source["type"] == "nextcloud":
+    elif source["type"] == "nextcloud_tag":
         tag = source["tag"]
-        local_root = Path(config["nextcloud"]["local_data_root"]).expanduser()
+        local_root = Path(source["path"])
         paths = gather_nc_tagged(config, tag)
 
-        for ap_str in paths:
-            ap = Path(ap_str)
+        for rp_str in paths:
+            if source["named_folder"] not in rp_str:
+                continue
+            rp = Path(rp_str)
+            ap = Path(rp_str.replace(source["named_folder"], str(local_root))).expanduser()
+            ap = local_root / rp
             if not ap.exists():
                 continue
-            rp = ap.relative_to(local_root)
+            if ap.is_dir():
+                files = get_files_with_tag_local(config, ap)
+                for f in files:
+                    afp = Path(f)
+                    rfp = afp.relative_to(local_root)
+                    st = afp.stat()
+                    entries.append((afp, rfp, int(st.st_mtime), st.st_size))
             st = ap.stat()
             entries.append((ap, rp, int(st.st_mtime), st.st_size))
-
     return entries
 
 
@@ -291,12 +353,15 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
     stype = source["type"]
 
     cur = conn.cursor()
+    print(f"SYncting source: {sname}")
     entries = gather_entries(config, source)
+    for f in entries:
+        print(f)
 
     # Reset existence markers for this source
     cur.execute(
-        "UPDATE files SET exists_in_source=0, exists_in_dest=0 WHERE source_name=?",
-        (sname,),
+        "UPDATE files SET exists_in_source=0, exists_in_dest=0 WHERE source_name=? AND active = 1",
+        (sname),
     )
 
     quarantine_root = Path(config["quarantine_root"]).expanduser()
@@ -352,13 +417,6 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
             (str(ap),)
         )
 
-    # Check DB for expected files in
-        cur.execute(
-            "SELECT id, mtime, size FROM files WHERE source_path=?",
-            (str(ap),)
-        )
-        row = cur.fetchone()
-
     conn.commit()
 
 
@@ -399,7 +457,7 @@ def cleanup(config: dict, conn: sqlite3.Connection, dest_root: Path) -> None:
     cur.execute("""
         SELECT source_name, relative_path, quarantined
         FROM files
-        WHERE exists_in_source = 0
+        WHERE exists_in_source = 0 AND active = 1
         """)
     stale = cur.fetchall()
 
@@ -411,12 +469,20 @@ def cleanup(config: dict, conn: sqlite3.Connection, dest_root: Path) -> None:
             if dest_path.exists() or dest_path.is_symlink():
                 print(f"[CLEANUP] removing stale dest: {dest_path}")
                 dest_path.unlink(missing_ok=True)
+            if config[sname]["dest_on_frame_deletion"]:
+                source_path = Path(config["dest_root"]) / Path(rp)
+                dest_root = Path(config[sname]["dest_on_frame_deletion"])
+                if source_path.exists() and dest_root.exists():
+                    # move source file to dest on frame
+                    target = dest_root / Path(rp)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    source_path.rename(target)
 
         prune_empty_dirs(dest_path, root)
 
         cur.execute("""
             UPDATE files
-            SET exists_in_dest = 0, mtime = ?
+            SET exists_in_dest = 0, mtime = ?, active = 0
             WHERE source_name = ? AND relative_path = ?
         """, (now, sname, rp))
 
@@ -470,7 +536,7 @@ def main() -> None:
     for src in sources:
         sync_source(config, conn, src, dest_root)
 
-    cleanup(config, conn, dest_root)
+    # cleanup(config, conn, dest_root)
 
     conn.close()
 
