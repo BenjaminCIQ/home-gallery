@@ -35,11 +35,10 @@ export const SettingsMenu = ({settingsOpen, setSettingsOpen }) => {
   const setNavigationTimeout = useSingleViewStore((s) => s.setNavigationTimeout);
 
   // your styling system
-  const itemClass = "md:opacity-40 hover:opacity-100 hover:cursor-pointer";
-  const buttonClass =
-    "block flex items-center justify-center rounded w-8 h-8 md:w-12 md:h-12";
-  const buttonBgClass = "bg-gray-400/60 md:bg-gray-400/70";
-  const iconClass = "md:text-2xl text-gray-800";
+  const itemClass = "md:opacity-70 hover:opacity-100 hover:cursor-pointer"
+  const buttonClass = "block flex items-center justify-center rounded w-8 h-8 md:w-12 md:h-12"
+  const buttonBgClass = "bg-gray-200/100 md:bg-gray-200/100 backdrop-blur-sm border border-gray-1000/10"
+  const iconClass = "md:text-2xl text-gray-1000"
 
   // Handle button click: toggle open and stop slideshow
   const handleToggle = () => {

@@ -50,10 +50,10 @@ export const MediaNav = ({current, prev, next, listLocation, dispatch}) => {
     }
   }, [prev, next]);
 
-  const itemClass = "md:opacity-40 hover:opacity-100 hover:cursor-pointer"
+  const itemClass = "md:opacity-70 hover:opacity-100 hover:cursor-pointer"
   const buttonClass = "block flex items-center justify-center rounded w-8 h-8 md:w-12 md:h-12"
-  const buttonBgClass = "bg-gray-400/60 md:bg-gray-400/70"
-  const iconClass = "md:text-2xl text-gray-800"
+  const buttonBgClass = "bg-gray-200/100 md:bg-gray-200/100 backdrop-blur-sm border border-gray-1000/10"
+  const iconClass = "md:text-2xl text-gray-1000"
 
   const hasGeo = current?.latitude && current?.longitude && current.latitude != 0 && current.longitude != 0
 
