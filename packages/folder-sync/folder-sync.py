@@ -22,7 +22,9 @@ import sqlite3
 from pathlib import Path
 import fcntl
 import errno
+import subprocess
 import requests
+import urllib.parse
 from typing import Dict, List, Tuple, Optional
 from tqdm import tqdm
 from xml.etree import ElementTree as ET
@@ -71,13 +73,13 @@ def is_stable(path: Path,
             st1.st_mtime == st2.st_mtime)
 
 
-def filetype_restricted(config: dict, source: dict, ap: Path) -> bool:
-    """Determine if file should be quarantined."""
+def check_sync_quarantine(config: dict, source: dict, ap: Path) -> Tuple[bool, bool]:
+    """Determine if file should be ignored, quarantined or synced"""
     filter_media = source.get("filter_media", False)
     quarantine_enabled = source.get("quarantine", False)
-    if filter_media and quarantine_enabled:
-        return not is_media(ap, config)
-    return False
+    should_sync = is_media(ap, config) or not filter_media
+    
+    return should_sync, quarantine_enabled
 
 def file_has_changed(db_row: Optional[Tuple[int, int, int]], mtime: int, size: int) -> bool:
     """Return True if no DB row exists or metadata mismatch."""
@@ -144,6 +146,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             source_name TEXT,
             source_type TEXT,
             source_path TEXT UNIQUE,
+            nextcloud_file_id INTEGER,
             relative_path TEXT,
             mtime INTEGER,
             size INTEGER,
@@ -157,7 +160,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 def upsert_file_record(cur: sqlite3.Cursor, db_row: Optional[Tuple[int, int, int]],
-                       source_name: str, source_type: str,
+                       source_name: str, source_type: str, file_id: int,
                        ap: Path, rp: Path,
                        mtime: int, size: int,
                        quarantined: bool
@@ -167,16 +170,16 @@ def upsert_file_record(cur: sqlite3.Cursor, db_row: Optional[Tuple[int, int, int
     if db_row is None:
         cur.execute("""
             INSERT INTO files
-            (source_name, source_type, source_path, relative_path,
+            (source_name, source_type, source_path, nextcloud_file_id, relative_path,
              mtime, size, exists_in_source, exists_in_dest, last_check, quarantined, active)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (source_name, source_type, str(ap), str(rp), mtime, size, 1, 0, now, int(quarantined), 1))                                                                            
+        """, (source_name, source_type, str(ap), file_id, str(rp), mtime, size, 1, 0, now, int(quarantined), 1))
     else:
         cur.execute("""
             UPDATE files
             SET mtime=?, size=?, exists_in_source=1, last_check=?, quarantined=?, active=?
             WHERE source_path=?
-        """, (mtime, size, now, int(quarantined), 0, 1, str(ap)))
+        """, (mtime, size, now, int(quarantined), 1, str(ap)))
 
 
 # ===============================================================
@@ -191,7 +194,7 @@ def nc_tag_id(config: dict, tag_name: str) -> Optional[str]:
     base = config["nextcloud"]["server_ip"].rstrip("/")  # e.g. http://ip_addr
     auth = (config["nextcloud"]["username"], config["nextcloud"]["app_password"])
 
-    url = f"{base}/nextcloud/remote.php/dav/systemtags-assigned/image"
+    url = f"{base}/nextcloud/remote.php/dav/systemtags-assigned"
 
     # XML body specifying the properties we want
     xml_body = '''<?xml version="1.0"?>
@@ -202,7 +205,6 @@ def nc_tag_id(config: dict, tag_name: str) -> Optional[str]:
     <oc:user-visible/>
     <oc:user-assignable/>
     <oc:can-assign/>
-    <nc:files-assigned/>
     <nc:reference-fileid/>                 
   </d:prop>         
 </d:propfind>'''
@@ -234,7 +236,7 @@ def nc_tag_id(config: dict, tag_name: str) -> Optional[str]:
 
 
 
-def get_files_with_tag(config: dict, tag_id: int) -> List[str]:
+def get_files_with_tag(config: dict, tag_id: int) -> List[Tuple[str, int]]:
     """
     Return a list of file paths for all files assigned the given tag_id.
     If a path is a folder, recursively glob files according to media_ext config.
@@ -252,6 +254,7 @@ def get_files_with_tag(config: dict, tag_id: int) -> List[str]:
     <d:getcontenttype/>
     <d:displayname/>
     <d:getetag/>
+    <oc:fileid/>
   </d:prop>
   <oc:filter-rules>
     <oc:systemtag>{tag_id}</oc:systemtag>
@@ -272,28 +275,31 @@ def get_files_with_tag(config: dict, tag_id: int) -> List[str]:
     }
 
     # Collect all paths (files and folders)
-    paths = []
+    paths: List[Tuple[str, int]] = []
     for resp in root.findall("d:response", ns):
         href_el = resp.find("d:href", ns)
         prop_el = resp.find("d:propstat/d:prop", ns)
+
         if href_el is None or prop_el is None:
             continue
 
-        href = href_el.text
-        paths.append(href)
+        file_id = resp.find("d:propstat/d:prop/oc:fileid", ns)
+        if file_id is None:
+           print(f"[GET FILES][WARN] Unable to obtain tag for file {href_el.text}. Cannot remove label in case of deletion from frame...")
 
-    paths = [x.partition(f"/nextcloud/remote.php/dav/files/{config['nextcloud']['username']}/")[-1] for x in paths]
+        href = href_el.text
+        file_path = urllib.parse.unquote(href.partition(f"/nextcloud/remote.php/dav/files/{config['nextcloud']['username']}/")[-1])
+        paths.append((file_path, file_id.text if file_id is not None else -1))
+
     return paths
 
 
-def gather_nc_tagged(config: dict, tag_name: str) -> List[str]:
+def gather_nc_tagged(config: dict, tag_name: str) -> List[Tuple[str, int]]:
     """Return list of absolute file paths for a Nextcloud tag."""
     tagid = nc_tag_id(config, tag_name)
     if not tagid:
         print(f"[WARN] Tag '{tag_name}' not found in Nextcloud")
         return []
-    
-    print(tagid)
 
     return get_files_with_tag(config, tagid)
 
@@ -302,11 +308,11 @@ def gather_nc_tagged(config: dict, tag_name: str) -> List[str]:
 # Entry Gathering
 # ===============================================================
 
-def gather_entries(config: dict, source: dict) -> List[Tuple[Path, Path, int, int]]:
+def gather_entries(config: dict, source: dict) -> List[Tuple[int, Path, Path, int, int]]:
     """
     Returns list of (absolute_path, relative_path, mtime, size)
     """
-    entries: List[Tuple[Path, Path, int, int]] = []
+    entries: List[Tuple[int, Path, Path, int, int]] = []
 
     if source["type"] == "local":
         base = Path(source["path"]).expanduser()
@@ -317,20 +323,21 @@ def gather_entries(config: dict, source: dict) -> List[Tuple[Path, Path, int, in
                 ap = dp / f
                 rp = ap.relative_to(base)
                 st = ap.stat()
-                entries.append((ap, rp, int(st.st_mtime), st.st_size))
+                entries.append((-1, ap, rp, int(st.st_mtime), st.st_size))
 
     elif source["type"] == "nextcloud_tag":
         tag = source["tag"]
         local_root = Path(source["path"])
         paths = gather_nc_tagged(config, tag)
 
-        for rp_str in paths:
+        for rp_str, file_id in paths:
             if source["named_folder"] not in rp_str:
                 continue
-            rp = Path(rp_str)
-            ap = Path(rp_str.replace(source["named_folder"], str(local_root))).expanduser()
-            ap = local_root / rp
+            print(rp_str)
+            rp = Path(rp_str).relative_to(source["named_folder"])
+            ap = (local_root / rp).expanduser()
             if not ap.exists():
+                print(f"{ap} does not exist")
                 continue
             if ap.is_dir():
                 files = get_files_with_tag_local(config, ap)
@@ -338,9 +345,10 @@ def gather_entries(config: dict, source: dict) -> List[Tuple[Path, Path, int, in
                     afp = Path(f)
                     rfp = afp.relative_to(local_root)
                     st = afp.stat()
-                    entries.append((afp, rfp, int(st.st_mtime), st.st_size))
+                    entries.append((-1, afp, rfp, int(st.st_mtime), st.st_size))
+                continue
             st = ap.stat()
-            entries.append((ap, rp, int(st.st_mtime), st.st_size))
+            entries.append((file_id, ap, rp, int(st.st_mtime), st.st_size))
     return entries
 
 
@@ -353,15 +361,19 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
     stype = source["type"]
 
     cur = conn.cursor()
-    print(f"SYncting source: {sname}")
+    print(f"Syncing source: {sname}")
     entries = gather_entries(config, source)
     for f in entries:
-        print(f)
+       print(f)
+
+    if len(entries) == 0:
+        print(f"[Sync Source {sname}] No entries found at all, assuming server connection issues...")
+        return
 
     # Reset existence markers for this source
     cur.execute(
-        "UPDATE files SET exists_in_source=0, exists_in_dest=0 WHERE source_name=? AND active = 1",
-        (sname),
+        "UPDATE files SET exists_in_source=0, exists_in_dest=0 WHERE source_name=?",
+        (sname,),
     )
 
     quarantine_root = Path(config["quarantine_root"]).expanduser()
@@ -373,27 +385,58 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
         mininterval=0.5,   # update every 0.5s max
         disable=config["disable_progress"]
     )
+    count=0
+    for file_id, ap, rp, mtime, size in pbar:
+        sync, quarantine = check_sync_quarantine(config, source, ap)
+        if not sync and not quarantine:
+            print(f"[Sync Entry][{sname}] filtering without quarantine enabled: file {ap} is ignored for sync")
+            continue
 
-    for ap, rp, mtime, size in pbar:
-        quarantined = filetype_restricted(config, source, ap)
-        target_root = quarantine_root if quarantined else dest_root
+        target_root = dest_root if sync else quarantine_root
 
         # DB check
         cur.execute(
-            "SELECT id, mtime, size FROM files WHERE source_path=?",
+            "SELECT id, mtime, size, nextcloud_file_id, active FROM files WHERE source_path=?",
             (str(ap),)
         )
         row = cur.fetchone()
 
         changed = True
+        active = 0
         if row:
-            _id, old_m, old_s = row
+            _id, old_m, old_s, file_id, active = row
             changed = not (old_m == mtime and old_s == size)
-        
+
         dest = target_root / sname / rp
 
         # Only act on files that don't exist already or have changed
         if changed or not dest.exists():
+            print(f"File {ap} is being synchronised! Changed: {changed} Exists: {dest.exists()}")
+
+            # If row exists but no longer in dest, assume its been deleted via the PhotoFrame
+            # In this case, we can either remove the tag or move the file from Uploaded to UploadRemoved
+            if not dest.exists() and row:
+                tag = source["tag"]
+                print(f"File {ap} has been removed from dest, assuming deleted via photoframe!")
+                if active == 0:
+                    print("already marked as inactive")
+                    continue
+                # remove tag from file (if exists)
+                file_id = row[3]
+                if file_id == -1:
+                    print(f"No file id found, tag will not be deleted...")
+                    continue
+                print(f"Removing nextcloud tag {tag} from ap which was deleted from PhotoFrame")
+                cmd = ["sudo", "-u", "www-data", "php", "/var/www/html/nextcloud/occ", "tag:files:delete", str(file_id), tag, "public"]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                print(result.stdout)
+                print(result.stderr)
+                cur.execute(
+                    "UPDATE files SET active = 0 WHERE source_path=?",
+                    (str(ap),)
+                )
+                continue
+
 
             # skip unstable files
             if not is_stable(ap):
@@ -401,22 +444,24 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
                 continue
 
             # Update DB metadata
-            upsert_file_record(cur, row, sname, stype, ap, rp, mtime, size, quarantined)
+            upsert_file_record(cur, row, sname, stype, file_id, ap, rp, mtime, size, quarantine)
 
             # Apply symlink or quarantine action
-            apply_file_action(ap, dest, quarantined)
-            
+            apply_file_action(ap, dest, quarantine)
+
             # Set that files exist in dest
             cur.execute(
                 "UPDATE files SET exists_in_dest=1 WHERE source_path=?",
                 (str(ap),)
             )
+            count+=1
 
         cur.execute(
             "UPDATE files SET exists_in_source=1 WHERE source_path=?",
             (str(ap),)
         )
 
+    print(f"Synced {count} files for PhotoFrame on source {sname}")
     conn.commit()
 
 
@@ -457,26 +502,32 @@ def cleanup(config: dict, conn: sqlite3.Connection, dest_root: Path) -> None:
     cur.execute("""
         SELECT source_name, relative_path, quarantined
         FROM files
-        WHERE exists_in_source = 0 AND active = 1
+        WHERE exists_in_source = 0 AND exists_in_dest = 0 AND active = 1
         """)
     stale = cur.fetchall()
-
+    print("Stale files:")
     for sname, rp, quarantined in stale:
         root = quarantine_root if quarantined else dest_root
         dest_path = root / sname / rp
-
+        print(rp)
         if not quarantined:
             if dest_path.exists() or dest_path.is_symlink():
                 print(f"[CLEANUP] removing stale dest: {dest_path}")
                 dest_path.unlink(missing_ok=True)
-            if config[sname]["dest_on_frame_deletion"]:
-                source_path = Path(config["dest_root"]) / Path(rp)
-                dest_root = Path(config[sname]["dest_on_frame_deletion"])
-                if source_path.exists() and dest_root.exists():
-                    # move source file to dest on frame
-                    target = dest_root / Path(rp)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    source_path.rename(target)
+            source = [x for x in config["sources"] if x["name"]==sname]
+            if len(source) == 0:
+                print(f"[CLEANUP][WARN] No source found with name {sname} in config")
+                continue
+            source = source[0]
+            print(f"source for stale: {source['name']}")
+            if source["dest_on_frame_deletion"]:
+               source_path = Path(config["dest_root"]) / Path(rp)
+               dest_root = Path(source["dest_on_frame_deletion"])
+               if source_path.exists() and dest_root.exists():
+                   # move source file to new dest
+                   target = dest_root / Path(rp)
+                   target.parent.mkdir(parents=True, exist_ok=True)
+                   source_path.rename(target)
 
         prune_empty_dirs(dest_path, root)
 
@@ -529,14 +580,14 @@ def main() -> None:
 
     # DB
     db_path = Path(config.get("state_db", "folder-sync.db")).expanduser()
-
+    
     conn = sqlite3.connect(str(db_path))
     init_db(conn)
 
     for src in sources:
         sync_source(config, conn, src, dest_root)
 
-    # cleanup(config, conn, dest_root)
+    cleanup(config, conn, dest_root)
 
     conn.close()
 
