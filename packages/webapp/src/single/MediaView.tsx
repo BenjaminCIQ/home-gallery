@@ -142,7 +142,7 @@ export const MediaView = () => {
   }
 
   useEffect(() => {
-    if (entries.length && !shuffledIndices.length)
+    if (entries.length && shuffledIndices.length != entries.length)
     {
       reshuffle();
     }
