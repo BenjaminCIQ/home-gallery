@@ -160,7 +160,7 @@ export const MediaView = () => {
   
       startSlideShowInterval();
   
-      dispatch({ type: "next", fromSlideshow: true });
+      //dispatch({ type: "next", fromSlideshow: true });
     }
   }, [entries.length, isSlideshowActive]);
   
@@ -177,11 +177,18 @@ export const MediaView = () => {
     startInactivityTimeout();
   }, [isSlideshowActive]);
 
+  const canRunSlideshow = () => {
+    const { isSlideshowActive, showDetails } = getState();
+    return isSlideshowActive && !showDetails;
+  };
+
   const startSlideShowInterval = useCallback(() => {
-    // Clear previous interval
-    if (slideshowIntervalRef.current) clearInterval(slideshowIntervalRef.current);
-  
-    // Use latest slideshowInterval from store
+    if (!canRunSlideshow()) return;
+
+    if (slideshowIntervalRef.current) {
+      clearInterval(slideshowIntervalRef.current);
+    }
+
     slideshowIntervalRef.current = setInterval(() => {
       dispatch({ type: "next", fromSlideshow: true });
     }, getState().slideshowInterval);
@@ -203,6 +210,19 @@ export const MediaView = () => {
       if (showNavigation && isSlideshowActive) toggleShowNavigation();
     }, getState().navigationTimeout);
   }, []);
+
+  useEffect(() => {
+    if (showDetails) {
+      // Pause slideshow immediately
+      if (slideshowIntervalRef.current) {
+        clearInterval(slideshowIntervalRef.current);
+        slideshowIntervalRef.current = null;
+      }
+    } else if (isSlideshowActive) {
+      // Resume slideshow when details close
+      startSlideShowInterval();
+    }
+  }, [showDetails, isSlideshowActive]);
   
   // ---------- Effect to restart timers when store values change ----------
   
@@ -249,9 +269,9 @@ export const MediaView = () => {
     const { type, fromSlideshow } = action;
     let { shuffledIndex, shuffledIndices, shuffleDirty } = getState();
     
-    if (!fromSlideshow) {
-      stopSlideshow();
-    }
+    // if (!fromSlideshow) {
+    //   stopSlideshow();
+    // }
 
     let prevNextMatch = type.match(/(prev|next)(-(\d+))?/)
     if (type === 'index') {
