@@ -365,10 +365,6 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
     entries = gather_entries(config, source)
     for f in entries:
        print(f)
-<<<<<<< HEAD
-
-=======
->>>>>>> 218bb89 (small fixes)
     if len(entries) == 0:
         print(f"[Sync Source {sname}] No entries found at all, assuming server connection issues...")
         return
