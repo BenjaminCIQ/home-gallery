@@ -365,6 +365,7 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
     entries = gather_entries(config, source)
     for f in entries:
        print(f)
+
     if len(entries) == 0:
         print(f"[Sync Source {sname}] No entries found at all, assuming server connection issues...")
         return
@@ -386,9 +387,12 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
     )
     count=0
     for file_id, ap, rp, mtime, size in pbar:
+        sync, quarantine = check_sync_quarantine(config, source, ap)
+        if not sync and not quarantine:
+            print(f"[Sync Entry][{sname}] filtering without quarantine enabled: file {ap} is ignored for sync")
+            continue
 
-        quarantined = filetype_restricted(config, source, ap)
-        target_root = quarantine_root if quarantined else dest_root
+        target_root = dest_root if sync else quarantine_root
 
         # DB check
         cur.execute(
@@ -440,10 +444,10 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
                 continue
 
             # Update DB metadata
-            upsert_file_record(cur, row, sname, stype, file_id, ap, rp, mtime, size, quarantined)
+            upsert_file_record(cur, row, sname, stype, file_id, ap, rp, mtime, size, quarantine)
 
             # Apply symlink or quarantine action
-            apply_file_action(ap, dest, quarantined)
+            apply_file_action(ap, dest, quarantine)
 
             # Set that files exist in dest
             cur.execute(
@@ -457,8 +461,7 @@ def sync_source(config: dict, conn: sqlite3.Connection, source: dict, dest_root:
             (str(ap),)
         )
 
-    print(f"Synced {count} files for PhotoFrame")
-
+    print(f"Synced {count} files for PhotoFrame on source {sname}")
     conn.commit()
 
 
@@ -517,15 +520,14 @@ def cleanup(config: dict, conn: sqlite3.Connection, dest_root: Path) -> None:
                 continue
             source = source[0]
             print(f"source for stale: {source['name']}")
-
-            #if source["dest_on_frame_deletion"]:
-            #    source_path = Path(config["dest_root"]) / Path(rp)
-            #    dest_root = Path(source["dest_on_frame_deletion"])
-            #    if source_path.exists() and dest_root.exists():
-            #        # move source file to dest on frame
-            #        target = dest_root / Path(rp)
-            #        target.parent.mkdir(parents=True, exist_ok=True)
-            #        source_path.rename(target)
+            if source["dest_on_frame_deletion"]:
+               source_path = Path(config["dest_root"]) / Path(rp)
+               dest_root = Path(source["dest_on_frame_deletion"])
+               if source_path.exists() and dest_root.exists():
+                   # move source file to new dest
+                   target = dest_root / Path(rp)
+                   target.parent.mkdir(parents=True, exist_ok=True)
+                   source_path.rename(target)
 
         prune_empty_dirs(dest_path, root)
 
