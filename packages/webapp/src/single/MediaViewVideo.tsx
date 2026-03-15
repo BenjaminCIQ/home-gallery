@@ -4,10 +4,9 @@ import Hammer from 'hammerjs'
 
 import { getHigherPreviewUrl } from '../utils/preview'
 import { usePreviewSize } from "./usePreviewSize";
-import { classNames } from "../utils/class-names";
 
 export const MediaViewVideo = (props) => {
-  const { media, dispatch, isSlideShowActive } = props
+  const { media, dispatch, isSlideshowActive } = props
   const { previews } = media;
   const [isPlaying, setIsPlaying] = useState(false)
   const ref = useRef()
@@ -43,68 +42,74 @@ export const MediaViewVideo = (props) => {
     }
   }, [ref, dispatch])
 
-  // Autoplay if slideshow is active
+  // Autoplay if slideshow is active (muted often required by browser policy)
   useEffect(() => {
     const video = ref.current;
     if (!video) return
 
-    if (isSlideShowActive) {
-      video.play().then(() => setIsPlaying(true))
-        .catch(err => console.warn("Autoplay failed:", err))
+    if (isSlideshowActive) {
+      const tryPlay = () => {
+        video.muted = true
+        video.play().then(() => setIsPlaying(true))
+          .catch(err => console.warn("Autoplay failed:", err))
+      }
+      if (video.readyState >= 2) {
+        tryPlay()
+      } else {
+        video.addEventListener('canplay', tryPlay, { once: true })
+        return () => video.removeEventListener('canplay', tryPlay)
+      }
     } else {
+      video.muted = false
       video.pause()
       setIsPlaying(false)
     }
-  }, [isSlideShowActive])
+  }, [isSlideshowActive])
 
+  // Overlay above control bar: tap = toggle nav, swipe when paused = next/prev (control bar stays tappable)
   useEffect(() => {
-    const video: HTMLMediaElement = ref.current;
-    const overlay: HTMLMediaElement = gestureOverlay.current;
-
-    if (!overlay || !video) {
-      return
-    }
+    const video = ref.current;
+    const overlay = gestureOverlay.current;
+    if (!video || !overlay) return;
 
     const onSwipeHandler = (ev) => {
-      if (!video.paused) {
-        return
-      }
-      ev.preventDefault()
-
+      if (!video.paused) return;
+      ev.preventDefault();
       if (ev.direction === Hammer.DIRECTION_LEFT) {
-        dispatch({type: 'next'})
+        dispatch({ type: 'next' });
       } else if (ev.direction === Hammer.DIRECTION_RIGHT) {
-        dispatch({type: 'prev'})
+        dispatch({ type: 'prev' });
       }
-    }
+    };
 
-    // const onTapHandler = (ev) => {
-    //   dispatch({type: 'toggleNavigation'})
-    //   ev.preventDefault()
-    // }
+    const onTapHandler = () => {
+      dispatch({ type: 'toggleNavigation' });
+    };
 
-    const mc = new Hammer.Manager(overlay)
-    mc.add(new Hammer.Swipe())
+    const mc = new Hammer.Manager(overlay);
+    mc.add(new Hammer.Swipe());
     mc.add(new Hammer.Tap());
-
-    mc.on("swipe", onSwipeHandler)
-    // mc.on("tap", onTapHandler)
+    mc.on('swipe', onSwipeHandler);
+    mc.on('tap', onTapHandler);
 
     return () => {
-      mc.stop(false)
-      mc.destroy()
-    }
-  }, [ref, gestureOverlay])
+      mc.stop(false);
+      mc.destroy();
+    };
+  }, [dispatch])
 
   return (
-    <>
-      <div className="flex items-center justify-center w-full h-full">
-        <video ref={ref} controls playsinline poster={posterUrl} className="w-full h-full">
-          <source src={videoUrl} type={videoMime} />
-          No native video element support. Watch video file from <a href={videoUrl}>here</a>
-        </video>
-        <div ref={gestureOverlay} className={classNames('absolute top-0 left-0 right-0 bottom-14 md:bottom-18', {'hidden': isPlaying})}></div>
-      </div>
-    </>
+    <div className="relative flex items-center justify-center w-full h-full">
+      <video ref={ref} controls playsInline poster={posterUrl} className="w-full h-full">
+        <source src={videoUrl} type={videoMime} />
+        No native video element support. Watch video file from <a href={videoUrl}>here</a>
+      </video>
+      {/* Tap = toggle nav; leaves bottom strip (control bar) uncovered so play/pause stay tappable */}
+      <div
+        ref={gestureOverlay}
+        className="absolute top-0 left-0 right-0 bottom-14 md:bottom-18"
+        aria-hidden
+      />
+    </div>
   )
 }
