@@ -11,6 +11,8 @@ export interface SingleViewStore {
   hideNavigation: boolean
   shuffledIndex: number
   shuffledIndices: number[]
+  prevPermutationTail: number[]
+  viewingTailAt: number | null
   loopImages: boolean
   shuffleImages: boolean
   shuffleDirty: boolean
@@ -28,6 +30,9 @@ export interface SingleViewStore {
   setHideNavigation(hide: boolean): void
   setShuffledIndex(shuffledIndex: number): void
   setShuffledIndices(indices: number[]): void
+  setPrevPermutationTail(tail: number[]): void
+  setViewingTailAt(at: number | null): void
+  clearSingleViewNavigationState(): void
   clearShuffledIndices(): void
   setLoopImages(v: boolean): void
   setResetSearchOnLoopEnd(v: boolean): void
@@ -57,6 +62,8 @@ export const useSingleViewStore = create<
   hideNavigation: false,
   shuffledIndices: [],
   shuffledIndex: 0,
+  prevPermutationTail: [],
+  viewingTailAt: null,
   loopImages: true,
   shuffleImages: true,
   shuffleDirty: false,
@@ -74,14 +81,17 @@ export const useSingleViewStore = create<
   setHideNavigation: (hide: boolean) => set((state) => ({ ...state, hideNavigation: hide })),
   setShuffledIndex: (shuffledIndex: number) => set((state: SingleViewStore) => ({...state, shuffledIndex})),
   setShuffledIndices: (indices: number[]) => set((state) => ({ ...state, shuffledIndices: indices })),
+  setPrevPermutationTail: (tail: number[]) => set({ prevPermutationTail: tail }),
+  setViewingTailAt: (at: number | null) => set({ viewingTailAt: at }),
+  clearSingleViewNavigationState: () => set({ prevPermutationTail: [], viewingTailAt: null }),
   setLoopImages: (v) => set({ loopImages: v }),
   setShuffleImages: (v) => set(state => ({shuffleImages: v, shuffleDirty: true})),
-  clearShuffleDirty: () =>set({ shuffleDirty: false }),
+  clearShuffleDirty: () => set({ shuffleDirty: false }),
   setResetSearchOnLoopEnd: (v) => set({ resetSearchOnLoopEnd: v}),
   setSlideshowInterval: (v) => set({ slideshowInterval: v }),
   setSlideshowTimeout: (v) => set({ slideshowTimeout: v }),
   setNavigationTimeout: (v) => set({ navigationTimeout: v }),
 }), {
   name: 'gallery-single-view',
-  partialize: excludeStateProps(['lastId', 'lastIndex']),
+  partialize: excludeStateProps(['lastId', 'lastIndex', 'prevPermutationTail', 'viewingTailAt']),
 }))

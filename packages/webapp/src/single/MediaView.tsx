@@ -90,6 +90,9 @@ export const MediaView = () => {
   const shuffledIndices = useSingleViewStore(state => state.shuffledIndices)
   const setShuffledIndex = useSingleViewStore(actions => actions.setShuffledIndex)
   const setShuffledIndices = useSingleViewStore(actions => actions.setShuffledIndices)
+  const setPrevPermutationTail = useSingleViewStore(actions => actions.setPrevPermutationTail)
+  const setViewingTailAt = useSingleViewStore(actions => actions.setViewingTailAt)
+  const clearSingleViewNavigationState = useSingleViewStore(actions => actions.clearSingleViewNavigationState)
 
   const slideshowIntervalRef = useRef<number | null>(null);
   const inactivityTimeoutRef = useRef<number | null>(null);
@@ -142,14 +145,25 @@ export const MediaView = () => {
   }
 
   useEffect(() => {
-    if (entries.length && shuffledIndices.length != entries.length)
-    {
+    if (entries.length && shuffledIndices.length !== entries.length) {
       reshuffle();
     }
   }, []); // only once
 
   useEffect(() => { id && setLastId(id) }, [id])
   useEffect(() => { index >= 0 && setLastIndex(index) }, [index])
+
+  // Sync position when opening from URL / list (e.g. direct link or list click). Do not clear tail when we're already viewing the tail (navigation within view).
+  useEffect(() => {
+    if (index < 0 || shuffledIndices.length !== entries.length) return;
+    if (getState().viewingTailAt !== null) return;
+    setViewingTailAt(null);
+    const state = getState();
+    if (state.shuffledIndices[state.shuffledIndex] !== index) {
+      const pos = state.shuffledIndices.indexOf(index);
+      if (pos >= 0) setShuffledIndex(pos);
+    }
+  }, [id, index, entries.length, shuffledIndices.length])
 
   const startSlideshow = useCallback(() => {
     if (!isSlideshowActive && entries.length) {
@@ -267,11 +281,8 @@ export const MediaView = () => {
 
   const dispatch = (action: any) => {
     const { type, fromSlideshow } = action;
-    let { shuffledIndex, shuffledIndices, shuffleDirty } = getState();
-    
-    // if (!fromSlideshow) {
-    //   stopSlideshow();
-    // }
+    const state = getState();
+    let { shuffledIndex, shuffledIndices, shuffleDirty, viewingTailAt, prevPermutationTail: tail, shuffleImages: shuffleOn, loopImages: loopOn } = state;
 
     let prevNextMatch = type.match(/(prev|next)(-(\d+))?/)
     if (type === 'index') {
@@ -280,46 +291,108 @@ export const MediaView = () => {
     } else if (prevNextMatch && entries.length) {
       const offset = prevNextMatch[3] ? +prevNextMatch[3] : 1
       const negate = prevNextMatch[1] == 'prev' ? -1 : 1
+      const len = shuffledIndices.length
 
-      let i = shuffledIndex + (negate * offset);
+      // Apply shuffle off/on (keep current image)
       if (shuffleDirty) {
-        reshuffle();
-        clearShuffleDirty();
-        viewEntry(getState().shuffledIndices[0]);
-        return;
-      }
-      // If end of indices reached
-      if (i >= shuffledIndices.length) {
-        // reset search query if slideshowActive and resetSearchOnLoopEnd
-        if (isSlideshowActive && search.value && resetSearchOnLoopEnd) {
-          search({type: 'none'});
-          // Wait for useEffect to trigger on updated entries
-        }
-        // if no search value and not looping, then if loop is active,
-        // then images should be reshuffled and viewing can continue
-        if (loopImages) {
-          i = (i + entries.length) % entries.length;
-          reshuffle();
-          setShuffledIndex(i);
-          viewEntry(getState().shuffledIndices[i]);
+        const currentEntryIndex = shuffledIndices[shuffledIndex]
+        if (shuffleOn) {
+          reshuffle()
+          const nextIndices = getState().shuffledIndices
+          const pos = nextIndices.indexOf(currentEntryIndex)
+          setShuffledIndex(pos >= 0 ? pos : 0)
+          setPrevPermutationTail([])
+          setViewingTailAt(null)
+          clearShuffleDirty()
+          viewEntry(currentEntryIndex)
         } else {
-          stopSlideshow();
-          setShuffledIndex(shuffleIndices.length - 1);
-          viewEntry(shuffledIndices[shuffledIndices.length - 1]); // goto last image
+          const sequential = [...Array(entries.length).keys()]
+          setShuffledIndices(sequential)
+          setShuffledIndex(currentEntryIndex)
+          setPrevPermutationTail([])
+          setViewingTailAt(null)
+          clearShuffleDirty()
+          viewEntry(currentEntryIndex)
         }
-      } else {
-        // if negative, then just go to last id (if exists) - this will be somewhere else in the shuffledIndices sequence though...going forward again won't take you back to the first image
-        // could be solved by storing a boolean if this event happens, then if next is called again, set index to -1 and add (negate * offset) from there
-        if (i < 0) {
-          if (lastId != '') {
-            // by not updating the shuffledIndex, calling next/prev again will go back to where it had been in the beginning of the shuffledIndices
-            viewEntry(findEntryIndex(location, entries, lastId));
+        return
+      }
+
+      // Viewing the previous-permutation tail (shuffle on only)
+      if (viewingTailAt !== null && tail.length > 0) {
+        if (negate === -1) {
+          if (viewingTailAt > 0) {
+            const nextAt = viewingTailAt - 1
+            setViewingTailAt(nextAt)
+            viewEntry(tail[nextAt])
           }
         } else {
-          setShuffledIndex(i);
-          viewEntry(shuffledIndices[i]); // normal case where loop has not ended
+          if (viewingTailAt < tail.length - 1) {
+            const nextAt = viewingTailAt + 1
+            setViewingTailAt(nextAt)
+            viewEntry(tail[nextAt])
+          } else {
+            setViewingTailAt(null)
+            setShuffledIndex(0)
+            viewEntry(getState().shuffledIndices[0])
+          }
         }
+        return
       }
+
+      let nextPos = shuffledIndex + (negate * offset)
+
+      // Next at end
+      if (nextPos >= len) {
+        if (isSlideshowActive && search.value && resetSearchOnLoopEnd) {
+          search({ type: 'none' })
+        }
+        if (!loopOn) {
+          stopSlideshow()
+          setShuffledIndex(len - 1)
+          viewEntry(shuffledIndices[len - 1])
+          return
+        }
+        if (shuffleOn) {
+          setPrevPermutationTail(shuffledIndices.slice(-10))
+          reshuffle()
+          setViewingTailAt(null)
+          setShuffledIndex(0)
+          viewEntry(getState().shuffledIndices[0])
+          return
+        }
+        nextPos = 0
+        setShuffledIndex(nextPos)
+        viewEntry(shuffledIndices[nextPos])
+        return
+      }
+
+      // Prev at start
+      if (nextPos < 0) {
+        if (shuffleOn && tail.length > 0) {
+          const tailIndex = tail.length - 1
+          setViewingTailAt(tailIndex)
+          viewEntry(tail[tailIndex])
+          return
+        }
+        if (loopOn) {
+          nextPos = ((nextPos % len) + len) % len
+          setShuffledIndex(nextPos)
+          viewEntry(shuffledIndices[nextPos])
+          return
+        }
+        setShuffledIndex(0)
+        viewEntry(shuffledIndices[0])
+        return
+      }
+
+      // In range: wrap when loop on (redundant for in-range but harmless), then apply
+      if (loopOn) {
+        nextPos = ((nextPos % len) + len) % len
+      } else {
+        nextPos = Math.min(len - 1, Math.max(0, nextPos))
+      }
+      setShuffledIndex(nextPos)
+      viewEntry(shuffledIndices[nextPos])
     } else if (type === 'toggleSlideshow') {
       if (isSlideshowActive) {
         stopSlideshow();
@@ -343,14 +416,19 @@ export const MediaView = () => {
         clearTimeout(navigationTimeoutRef.current);
       }
     } else if (type == 'first' && entries.length) {
-      setShuffledIndex(shuffledIndices.indexOf(0)); // equal to shuffledIndices[shuffledIndex]
-      viewEntry(0);
+      setViewingTailAt(null);
+      setShuffledIndex(0);
+      viewEntry(getState().shuffledIndices[0]);
     } else if (type == 'last' && entries.length) {
-      setShuffledIndex(shuffledIndices.indexOf(entries.length - 1));
-      viewEntry(entries.length - 1); // equal to shuffledIndices[shuffledIndex]
+      const l = getState().shuffledIndices.length;
+      setViewingTailAt(null);
+      setShuffledIndex(l - 1);
+      viewEntry(getState().shuffledIndices[l - 1]);
     } else if (type == 'list') {
+      clearSingleViewNavigationState();
       navigate(`${listLocation.pathname}${listLocation.search ? encodeUrl(listLocation.search) : ''}`, {state: {id: current?.id}});
     } else if (type == 'chronology') {
+      clearSingleViewNavigationState();
       search({type: 'none'});
       navigate('/');
     } else if (type == 'play') {
