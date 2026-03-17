@@ -48,6 +48,7 @@ export const MediaViewVideo = (props) => {
     if (!video) return
 
     if (isSlideshowActive) {
+      video.loop = true
       const tryPlay = () => {
         video.muted = true
         video.play().then(() => setIsPlaying(true))
@@ -60,6 +61,7 @@ export const MediaViewVideo = (props) => {
         return () => video.removeEventListener('canplay', tryPlay)
       }
     } else {
+      video.loop = false
       video.muted = false
       video.pause()
       setIsPlaying(false)
@@ -100,7 +102,7 @@ export const MediaViewVideo = (props) => {
 
   return (
     <div className="relative flex items-center justify-center w-full h-full">
-      <video ref={ref} controls playsInline poster={posterUrl} className="w-full h-full">
+      <video ref={ref} controls playsInline poster={posterUrl} className="w-full h-full" loop={isSlideshowActive}>
         <source src={videoUrl} type={videoMime} />
         No native video element support. Watch video file from <a href={videoUrl}>here</a>
       </video>
