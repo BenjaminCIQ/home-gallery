@@ -371,3 +371,21 @@ export const disableMissingNextcloudMediaEntries = (dbPath, sourceRef, originTag
     return toDisable
   })
 }
+
+export const listActiveNextcloudMediaEntries = (dbPath, sourceRef, originTag) => {
+  return withDb(dbPath, db => {
+    const statement = db.prepare(`
+      SELECT entry_id, file_path, file_fingerprint, origin_mode, origin_folder_path, state
+      FROM media
+      WHERE source_type = 'nextcloud_tag'
+        AND source_ref = @source_ref
+        AND origin_tag = @origin_tag
+        AND state = 'active'
+      ORDER BY file_path
+    `)
+    return statement.all({
+      source_ref: sourceRef,
+      origin_tag: originTag
+    })
+  })
+}
