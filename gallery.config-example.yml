@@ -124,8 +124,8 @@
     #tag: photoframe
     # Optional folder prefix filter for nextcloud_tag
     #namedFolder: Uploads/PhotoFrame
-    # Optional source-specific projection folder below nextcloudProjection.stagingRoot
-    #stagingSubdir: nextcloud_photoframe
+    # Optional source-specific projection folder below nextcloudProjection.root
+    #projectionSubdir: nextcloud_photoframe
     # Optional source-specific projection strategy override
     #materializationMode: auto
     #materializationMode: link
@@ -138,15 +138,14 @@
 
 # Nextcloud projection settings (used when at least one source has type: nextcloud_tag)
 #nextcloudProjection:
-  # Folder that Home Gallery indexes for projected Nextcloud media
-  #stagingRoot: /path/to/photoframe-staging
+  # Base projection folder that Home Gallery indexes (via source dir mapping)
+  #root: /path/to/nextcloud-projection
   # Projection strategy default
   #materializationMode: auto
   #materializationMode: link
   #materializationMode: copy
-  # Remove obsolete staged files on reconciliation
-  #cleanupRemoved: true
-  # Validation strategy for staged file updates
+  # Reconciliation always removes projected files that no longer match selection or media_state (no toggle).
+  # Validation strategy for projected file updates
   #hashValidation: etag
   #hashValidation: size_mtime
   #hashValidation: checksum

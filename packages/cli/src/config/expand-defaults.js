@@ -100,7 +100,6 @@ export const expandConfigDefaults = (config, env) => {
   config.nextcloudProjection = {
     stagingRoot: '{cacheDir}/nextcloud-staging',
     materializationMode: 'auto',
-    cleanupRemoved: true,
     hashValidation: 'etag',
     ...config.nextcloudProjection
   }
