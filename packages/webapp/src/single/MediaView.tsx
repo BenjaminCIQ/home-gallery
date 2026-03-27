@@ -14,7 +14,7 @@ import { useEntryStore } from "../store/entry-store";
 import { useSearchStore } from "../store/search-store";
 import { useSingleViewStore } from "../store/single-view-store";
 import useListLocation from '../utils/useListLocation';
-import { deleteMedia } from '../api/ApiService';
+import { removeFromFrame } from '../api/ApiService';
 
 import { MediaNav } from './MediaNav';
 import { MediaViewUnknownType } from './MediaViewUnknownType';
@@ -441,7 +441,7 @@ export const MediaView = () => {
       navigate(`/map?lat=${current.latitude.toFixed(5)}&lng=${current.longitude.toFixed(5)}&zoom=14`, {state: {listLocation}})
     } else if (type == 'deleteEntry') {
       const { id } = action;
-      deleteMedia(id);
+      removeFromFrame(id);
     }
   }
 

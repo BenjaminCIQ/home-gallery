@@ -6,6 +6,20 @@ import { Taggable } from './taggable.js';
 
 import { removeEvent } from './remove-event.js'
 
+const removeEntryFile = <T extends Taggable>(data: T, event: Event, eventsFileName: PathLike): boolean => {
+  if (!data.files || !data.files.length) {
+    return false;
+  }
+  const filePath = data.files[0].filepath
+  try {
+    fs.unlinkSync(filePath);
+    removeEvent(eventsFileName, event)
+  } catch (err) {
+    console.error("Error deleting file:", err);
+  }
+  return true;
+}
+
 const applyEventAction = <T extends Taggable>(data: T, action: EventAction, event: Event, eventsFileName: PathLike): boolean => {
   let changed = false;
   switch (action.action) {
@@ -31,16 +45,11 @@ const applyEventAction = <T extends Taggable>(data: T, action: EventAction, even
       break;
     }
     case 'delete': {
-      if (!data.files || !data.files.length) {
-        return false;
-      }
-      const filePath = data.files[0].filepath
-      try {
-        fs.unlinkSync(filePath);
-        removeEvent(eventsFileName, event)
-      } catch (err) {
-        console.error("Error deleting file:", err);
-      }
+      changed = removeEntryFile(data, event, eventsFileName) || changed;
+      break;
+    }
+    case 'removeFromFrame': {
+      changed = removeEntryFile(data, event, eventsFileName) || changed;
       break;
     }
   }

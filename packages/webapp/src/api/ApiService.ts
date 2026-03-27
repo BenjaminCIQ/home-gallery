@@ -27,6 +27,11 @@ export const deleteMedia = async(entryID: string) => {
   return pushEvent(event);
 }
 
+export const removeFromFrame = async(entryID: string) => {
+  const event: Event = {type: 'userAction', id: uuidv4(), targetIds: [entryID], actions: [{action: 'removeFromFrame'}]};
+  return pushEvent(event);
+}
+
 let eventStreamSubscribed = false;
 
 const unsavedEventHandler = new UnsavedEventHandler();

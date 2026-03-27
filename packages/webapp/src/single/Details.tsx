@@ -306,16 +306,16 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
           <div className="flex-grow"></div>
 
           {/* ------------------------ */}
-          {/* NEW DELETE BUTTON BELOW */}
+          {/* REMOVE FROM FRAME BUTTON */}
           {/* ------------------------ */}
           <div className="flex justify-center mt-6">
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="flex items-center gap-2 px-4 py-2 text-red-400 border border-red-600 rounded hover:bg-red-700/40 hover:text-red-200"
-              title="Delete this media"
+              title="Remove this media from frame"
             >
               <FontAwesomeIcon icon={icons.faTrash} />
-              Delete
+              Remove from frame
             </button>
           </div>
 
@@ -324,13 +324,13 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
       </div>
 
       {/* ------------------------ */}
-      {/* DELETE CONFIRMATION POPUP */}
+      {/* REMOVE CONFIRMATION POPUP */}
       {/* ------------------------ */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg text-gray-300 w-80">
-            <h2 className="text-lg mb-4">Confirm Delete</h2>
-            <p className="mb-6">Are you sure you want to delete this image?</p>
+            <h2 className="text-lg mb-4">Remove From Frame</h2>
+            <p className="mb-6">Are you sure you want to remove this image from frame?</p>
 
             <div className="flex justify-end gap-3">
               <button
@@ -349,7 +349,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
                 }}
                 className="px-3 py-1 rounded bg-red-600 hover:bg-red-500"
               >
-                Delete
+                Remove
               </button>
             </div>
           </div>

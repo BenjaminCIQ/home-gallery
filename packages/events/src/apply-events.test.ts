@@ -212,4 +212,5 @@ t.test('applyEvents()', async t => {
     const result = applyEvents(entries, events, '');
     t.same(result.length, 1);
   });
+
 });
