@@ -114,6 +114,52 @@
     #matcher: size-ctime
     # size matcher should be used if you know what you are doing
     #matcher: size
+    #
+    # Optional source name used for projection and media-state mapping
+    #name: nextcloud_photoframe
+    # Source type for projection workflows
+    #type: local_folder
+    #type: nextcloud_tag
+    # Nextcloud selection tag when type is nextcloud_tag
+    #tag: photoframe
+    # Optional folder prefix filter for nextcloud_tag
+    #namedFolder: Uploads/PhotoFrame
+    # Optional source-specific projection folder below nextcloudProjection.stagingRoot
+    #stagingSubdir: nextcloud_photoframe
+    # Optional source-specific projection strategy override
+    #materializationMode: auto
+    #materializationMode: link
+    #materializationMode: copy
+    # Optional local remove policy override
+    #onRemoveFromFrame: trash
+    #onRemoveFromFrame: delete
+    # Optional local trash folder override
+    #trashPath: /path/to/photoframe-trash
+
+# Nextcloud projection settings (used when at least one source has type: nextcloud_tag)
+#nextcloudProjection:
+  # Folder that Home Gallery indexes for projected Nextcloud media
+  #stagingRoot: /path/to/photoframe-staging
+  # Projection strategy default
+  #materializationMode: auto
+  #materializationMode: link
+  #materializationMode: copy
+  # Remove obsolete staged files on reconciliation
+  #cleanupRemoved: true
+  # Validation strategy for staged file updates
+  #hashValidation: etag
+  #hashValidation: size_mtime
+  #hashValidation: checksum
+
+# Media state settings for remove/restore lifecycle tracking
+#mediaState:
+  # SQLite database file path for media lifecycle state
+  #dbPath: '{configDir}/{configPrefix}media-state.db'
+  # Local source removal default
+  #localRemovalPolicy: trash
+  #localRemovalPolicy: delete
+  # Default local trash destination when localRemovalPolicy=trash
+  #localTrashPath: /path/to/photoframe-trash
 
 # Extractor settings
 #extractor:

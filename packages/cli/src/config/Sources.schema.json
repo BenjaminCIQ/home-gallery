@@ -16,6 +16,16 @@
         "description": "Source directory with custom settings",
         "type": "object",
         "properties": {
+          "name": {
+            "description": "Optional unique source name used for projection and media-state mapping",
+            "type": "string",
+            "examples": ["nextcloud_photoframe"]
+          },
+          "type": {
+            "description": "Source type. Use nextcloud_tag for Nextcloud tag projection sources",
+            "type": "string",
+            "enum": ["local_folder", "nextcloud_tag"]
+          },
           "dir": {
             "description": "Path of source directory",
             "type": "string",
@@ -72,6 +82,33 @@
               "description": "size matcher should be used if you know what you are doing",
               "const": "size"
             }]
+          },
+          "tag": {
+            "description": "Nextcloud selection tag name when source type is nextcloud_tag",
+            "type": "string",
+            "examples": ["photoframe"]
+          },
+          "namedFolder": {
+            "description": "Optional Nextcloud folder prefix filter for nextcloud_tag sources",
+            "type": "string"
+          },
+          "stagingSubdir": {
+            "description": "Optional projection staging subdirectory for this source",
+            "type": "string"
+          },
+          "materializationMode": {
+            "description": "Projection strategy override for this source",
+            "type": "string",
+            "enum": ["auto", "link", "copy"]
+          },
+          "onRemoveFromFrame": {
+            "description": "Local source remove policy override used by media_state handling",
+            "type": "string",
+            "enum": ["trash", "delete"]
+          },
+          "trashPath": {
+            "description": "Optional trash destination override for local source remove operations",
+            "type": "string"
           }
         }
       }
