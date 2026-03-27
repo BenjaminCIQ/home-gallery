@@ -217,3 +217,47 @@ export const listActiveTagsBySource = (dbPath, sourceTagName) => {
     return statement.all({ tag_name: sourceTagName })
   })
 }
+
+export const replaceMediaStateTagSnapshot = (dbPath, sourceTagName, records) => {
+  const now = getNow()
+  return withDb(dbPath, db => {
+    const updateDeleted = db.prepare(`
+      UPDATE tags
+      SET status = 'deleted',
+          status_changed_at = @status_changed_at,
+          observed_at = @observed_at
+      WHERE source_type = 'nextcloud_tag'
+        AND tag_name = @tag_name
+        AND status = 'active'
+    `)
+
+    const upsert = db.prepare(`
+      INSERT INTO tags (
+        source_type, tag_name, target_type, target_path, target_file_id, status, status_changed_at, observed_at
+      ) VALUES (
+        'nextcloud_tag', @tag_name, @target_type, @target_path, @target_file_id, 'active', @status_changed_at, @observed_at
+      )
+      ON CONFLICT(source_type, tag_name, target_type, target_path) DO UPDATE SET
+        target_file_id=excluded.target_file_id,
+        status='active',
+        status_changed_at=excluded.status_changed_at,
+        observed_at=excluded.observed_at
+    `)
+
+    const tx = db.transaction((tagName, snapshotRows) => {
+      updateDeleted.run({ tag_name: tagName, status_changed_at: now, observed_at: now })
+      for (const row of snapshotRows) {
+        upsert.run({
+          tag_name: tagName,
+          target_type: row.target_type,
+          target_path: row.target_path,
+          target_file_id: row.target_file_id || null,
+          status_changed_at: row.status_changed_at || now,
+          observed_at: row.observed_at || now
+        })
+      }
+    })
+
+    tx(sourceTagName, records || [])
+  })
+}
