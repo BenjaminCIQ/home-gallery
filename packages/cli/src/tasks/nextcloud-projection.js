@@ -2,7 +2,12 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import Logger from '@home-gallery/logger'
-import { appendMediaStateEvent, replaceMediaStateTagSnapshot, upsertMediaStateEntries } from './media-state-db.js'
+import {
+  appendMediaStateEvent,
+  disableMissingNextcloudMediaEntries,
+  replaceMediaStateTagSnapshot,
+  upsertMediaStateEntries
+} from './media-state-db.js'
 import { discoverNextcloudTaggedFiles, discoverNextcloudTagTargets } from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
@@ -63,15 +68,23 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       origin_folder_path: row.origin_folder_path,
       state: 'active'
     })))
+    const seenFingerprints = fileCandidates.map(buildFingerprint)
+    const disabledRows = disableMissingNextcloudMediaEntries(
+      options?.config?.mediaState?.dbPath,
+      sourceRef,
+      source.tag,
+      seenFingerprints
+    )
     source.nextcloudDiscovery = {
       taggedTargetCount: tagTargets.length,
-      fileCandidateCount: fileCandidates.length
+      fileCandidateCount: fileCandidates.length,
+      disabledMissingCount: disabledRows.length
     }
     appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
       event_type: 'nextcloud_discovery',
       source_type: 'nextcloud_tag',
       source_ref: sourceRef,
-      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length}`
+      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length},disabled_missing:${disabledRows.length}`
     })
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)

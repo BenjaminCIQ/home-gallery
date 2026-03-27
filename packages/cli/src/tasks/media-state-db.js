@@ -153,9 +153,18 @@ export const upsertMediaStateEntry = (dbPath, entry) => {
         origin_tag=excluded.origin_tag,
         origin_mode=excluded.origin_mode,
         origin_folder_path=excluded.origin_folder_path,
-        state=excluded.state,
-        disabled_at=excluded.disabled_at,
-        deleted_at=excluded.deleted_at,
+        state=CASE
+          WHEN media.state IN ('disabled', 'deleted_local') THEN media.state
+          ELSE excluded.state
+        END,
+        disabled_at=CASE
+          WHEN media.state = 'disabled' THEN media.disabled_at
+          ELSE excluded.disabled_at
+        END,
+        deleted_at=CASE
+          WHEN media.state = 'deleted_local' THEN media.deleted_at
+          ELSE excluded.deleted_at
+        END,
         last_seen_at=excluded.last_seen_at,
         updated_at=excluded.updated_at
     `)
@@ -197,9 +206,18 @@ export const upsertMediaStateEntries = (dbPath, entries) => {
         origin_tag=excluded.origin_tag,
         origin_mode=excluded.origin_mode,
         origin_folder_path=excluded.origin_folder_path,
-        state=excluded.state,
-        disabled_at=excluded.disabled_at,
-        deleted_at=excluded.deleted_at,
+        state=CASE
+          WHEN media.state IN ('disabled', 'deleted_local') THEN media.state
+          ELSE excluded.state
+        END,
+        disabled_at=CASE
+          WHEN media.state = 'disabled' THEN media.disabled_at
+          ELSE excluded.disabled_at
+        END,
+        deleted_at=CASE
+          WHEN media.state = 'deleted_local' THEN media.deleted_at
+          ELSE excluded.deleted_at
+        END,
         last_seen_at=excluded.last_seen_at,
         updated_at=excluded.updated_at
     `)
@@ -308,5 +326,48 @@ export const replaceMediaStateTagSnapshot = (dbPath, sourceTagName, records) => 
     })
 
     tx(sourceTagName, records || [])
+  })
+}
+
+export const disableMissingNextcloudMediaEntries = (dbPath, sourceRef, originTag, seenFingerprints) => {
+  const now = getNow()
+  return withDb(dbPath, db => {
+    const rows = db.prepare(`
+      SELECT id, entry_id, file_fingerprint, file_path
+      FROM media
+      WHERE source_type = 'nextcloud_tag'
+        AND source_ref = @source_ref
+        AND origin_tag = @origin_tag
+        AND state = 'active'
+    `).all({
+      source_ref: sourceRef,
+      origin_tag: originTag
+    })
+
+    const seen = new Set(seenFingerprints || [])
+    const toDisable = rows.filter(row => !seen.has(row.file_fingerprint))
+    if (!toDisable.length) {
+      return []
+    }
+
+    const update = db.prepare(`
+      UPDATE media
+      SET state = 'disabled',
+          disabled_at = @disabled_at,
+          updated_at = @updated_at
+      WHERE id = @id
+    `)
+    const tx = db.transaction(targetRows => {
+      for (const row of targetRows) {
+        update.run({
+          id: row.id,
+          disabled_at: now,
+          updated_at: now
+        })
+      }
+    })
+    tx(toDisable)
+
+    return toDisable
   })
 }
