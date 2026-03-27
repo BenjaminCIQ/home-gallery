@@ -8,6 +8,8 @@ import { usePreviewSize } from "./usePreviewSize";
 export const MediaViewVideo = (props) => {
   const { media, dispatch, isSlideshowActive } = props
   const { previews } = media;
+  const duration = media?.duration || 0
+  const shouldAutoplayInSlideshow = duration <= 0 || duration >= 5
   const [isPlaying, setIsPlaying] = useState(false)
   const ref = useRef()
   const gestureOverlay = useRef()
@@ -49,6 +51,12 @@ export const MediaViewVideo = (props) => {
 
     if (isSlideshowActive) {
       video.loop = true
+      if (!shouldAutoplayInSlideshow) {
+        video.muted = false
+        video.pause()
+        setIsPlaying(false)
+        return
+      }
       const tryPlay = () => {
         video.muted = true
         video.play().then(() => setIsPlaying(true))
@@ -66,7 +74,7 @@ export const MediaViewVideo = (props) => {
       video.pause()
       setIsPlaying(false)
     }
-  }, [isSlideshowActive])
+  }, [isSlideshowActive, shouldAutoplayInSlideshow])
 
   // Overlay above control bar: tap = toggle nav, swipe when paused = next/prev (control bar stays tappable)
   useEffect(() => {
