@@ -22,11 +22,6 @@ export const addTags = async (entryIds: string[], tags: Tag[]) => {
   return pushEvent(event);
 }
 
-export const deleteMedia = async(entryID: string) => {
-  const event: Event = {type: 'userAction', id: uuidv4(), targetIds: [entryID], actions: [{action: 'delete'}]};
-  return pushEvent(event);
-}
-
 export const removeFromFrame = async(entryID: string) => {
   const event: Event = {type: 'userAction', id: uuidv4(), targetIds: [entryID], actions: [{action: 'removeFromFrame'}]};
   return pushEvent(event);
