@@ -6,6 +6,7 @@ const log = Logger('server.api.events');
 
 import { readEvents, appendEvent } from '@home-gallery/events';
 import { applyNextcloudOccRemoveFromFrame } from './nextcloud-occ.js'
+import { applyMediaStateLifecycleEvent } from './media-state.js'
 
 import { sendError } from '../error/index.js';
 
@@ -111,6 +112,13 @@ export async function eventsApi(context) {
       event.date = new Date().toISOString();
     }
     appendEvent(eventsFilename, event)
+      .then(() => {
+        return applyMediaStateLifecycleEvent(config, event)
+          .catch(err => {
+            log.warn(err, `Failed to apply media_state lifecycle side effects for event ${event.id}`)
+          })
+          .then(() => event)
+      })
       .then(() => {
         return applyNextcloudOccRemoveFromFrame(config, event)
           .catch(err => {
