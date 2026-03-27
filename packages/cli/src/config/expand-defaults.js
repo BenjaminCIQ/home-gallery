@@ -44,7 +44,11 @@ export const expandConfigDefaults = (config, env) => {
         defaults.index = '{configDir}/{configPrefix}{basename(dir)}.idx'
       }
 
-      config.sources[i] = Object.assign(defaults, source)
+      const merged = Object.assign(defaults, source)
+      if (isNextcloudTagSource) {
+        merged.dir = `{nextcloudProjection.root}/${merged.projectionSubdir}`
+      }
+      config.sources[i] = merged
     }
   } else {
     config.sources = []

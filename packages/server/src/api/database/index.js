@@ -1,6 +1,7 @@
 import Logger from '@home-gallery/logger'
 
 import { applyEvents } from './events-facade.js'
+import { applyRemoveFromFramePhysical } from './remove-from-frame-physical.js'
 import { waitReadWatch } from './read-database.js';
 import { cache } from './cache-middleware.js';
 import { sanitizeInt } from './sanitize.js';
@@ -67,16 +68,23 @@ export async function databaseApi(context) {
       log.warn(`Received a user action event without a database. Skip event merging for database`);
       return
     }
-    const changedEntries = applyEvents(database, [event], eventsFileName)
-    if (!changedEntries.length) {
+    const physicalEntries = applyRemoveFromFramePhysical(config, database, event)
+    const changedEntries = applyEvents(database, [event], eventsFileName, { skipRemoveFromFrameFile: true })
+    const merged = [...changedEntries]
+    for (const entry of physicalEntries) {
+      if (!merged.includes(entry)) {
+        merged.push(entry)
+      }
+    }
+    if (!merged.length) {
       log.debug(`Event did not change current database`);
       return
     }
-    log.debug(`Applied user action event to ${changedEntries.length} database entries`);
-    clearCaches(changedEntries)
+    log.debug(`Applied user action event to ${merged.length} database entries`);
+    clearCaches(merged)
     eventbus.emit('database', {
       action: 'updateEntries',
-      entries: changedEntries
+      entries: merged
     })
   })
 

@@ -10,7 +10,11 @@ import {
   replaceMediaStateTagSnapshot,
   upsertMediaStateEntries
 } from './media-state-db.js'
-import { discoverNextcloudTaggedFiles, discoverNextcloudTagTargets } from './nextcloud-discovery.js'
+import {
+  discoverNextcloudTaggedFiles,
+  discoverNextcloudTagTargets,
+  NEXTCLOUD_RECONCILE_SKIP_PREFIX
+} from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
 
@@ -156,7 +160,10 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       continue
     }
 
-    source.nextcloudLocalRoot = source.nextcloudLocalRoot || source.localDir || source.dir
+    source.nextcloudLocalRoot = source.localDir
+    if (!source.nextcloudLocalRoot) {
+      throw new Error(`nextcloud_tag source '${source.name || source.index}' requires localDir`)
+    }
     const projectionSubdir = getDefaultProjectionSubdir(source, i)
     const sourceDir = path.resolve(projectionRoot, projectionSubdir)
     await fs.mkdir(sourceDir, { recursive: true })
@@ -167,57 +174,74 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       source.materializationMode = options?.config?.nextcloudProjection?.materializationMode || 'auto'
     }
 
-    const tagTargets = await discoverNextcloudTagTargets(source, options?.config)
-    replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagTargets)
-    const fileCandidates = await discoverNextcloudTaggedFiles(source, options?.config, tagTargets)
     const sourceRef = source.name || source.index
-    const candidateEntries = fileCandidates.map(row => ({
-      entry_id: buildEntryId(sourceRef, row.target_path),
-      source_type: 'nextcloud_tag',
-      source_ref: sourceRef,
-      file_path: row.target_path,
-      file_fingerprint: buildFingerprint(row),
-      target_file_id: row.target_file_id || null,
-      origin_tag: source.tag,
-      origin_mode: row.origin_mode,
-      origin_folder_path: row.origin_folder_path,
-      state: 'active'
-    }))
-    upsertMediaStateEntries(options?.config?.mediaState?.dbPath, candidateEntries)
-    const reenabledRows = reenableEligibleNextcloudMediaEntries(
-      options?.config?.mediaState?.dbPath,
-      sourceRef,
-      source.tag,
-      candidateEntries
-    )
-    const seenFingerprints = fileCandidates.map(buildFingerprint)
-    const disabledRows = disableMissingNextcloudMediaEntries(
-      options?.config?.mediaState?.dbPath,
-      sourceRef,
-      source.tag,
-      seenFingerprints
-    )
-    const projection = await applyProjectionMaterialization({
-      source,
-      sourceDir,
-      sourceRef,
-      mode: source.materializationMode,
-      dbPath: options?.config?.mediaState?.dbPath
-    })
-    source.nextcloudDiscovery = {
-      taggedTargetCount: tagTargets.length,
-      fileCandidateCount: fileCandidates.length,
-      disabledMissingCount: disabledRows.length,
-      reenabledCount: reenabledRows.length,
-      materializedCount: projection.materializedCount,
-      removedProjectedCount: projection.removedCount
+    try {
+      const tagTargets = await discoverNextcloudTagTargets(source, options?.config)
+      replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagTargets)
+      const fileCandidates = await discoverNextcloudTaggedFiles(source, options?.config, tagTargets)
+      const candidateEntries = fileCandidates.map(row => ({
+        entry_id: buildEntryId(sourceRef, row.target_path),
+        source_type: 'nextcloud_tag',
+        source_ref: sourceRef,
+        file_path: row.target_path,
+        file_fingerprint: buildFingerprint(row),
+        target_file_id: row.target_file_id || null,
+        origin_tag: source.tag,
+        origin_mode: row.origin_mode,
+        origin_folder_path: row.origin_folder_path,
+        state: 'active'
+      }))
+      upsertMediaStateEntries(options?.config?.mediaState?.dbPath, candidateEntries)
+      const reenabledRows = reenableEligibleNextcloudMediaEntries(
+        options?.config?.mediaState?.dbPath,
+        sourceRef,
+        source.tag,
+        candidateEntries
+      )
+      const seenFingerprints = fileCandidates.map(buildFingerprint)
+      const disabledRows = disableMissingNextcloudMediaEntries(
+        options?.config?.mediaState?.dbPath,
+        sourceRef,
+        source.tag,
+        seenFingerprints
+      )
+      const projection = await applyProjectionMaterialization({
+        source,
+        sourceDir,
+        sourceRef,
+        mode: source.materializationMode,
+        dbPath: options?.config?.mediaState?.dbPath
+      })
+      source.nextcloudDiscovery = {
+        taggedTargetCount: tagTargets.length,
+        fileCandidateCount: fileCandidates.length,
+        disabledMissingCount: disabledRows.length,
+        reenabledCount: reenabledRows.length,
+        materializedCount: projection.materializedCount,
+        removedProjectedCount: projection.removedCount
+      }
+      appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
+        event_type: 'nextcloud_discovery',
+        source_type: 'nextcloud_tag',
+        source_ref: sourceRef,
+        reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length},disabled_missing:${disabledRows.length},reenabled:${reenabledRows.length}`
+      })
+    } catch (err) {
+      const msg = String(err?.message || err)
+      if (msg.startsWith(NEXTCLOUD_RECONCILE_SKIP_PREFIX)) {
+        log.warn(`Skipping nextcloud reconcile for '${source.name || source.index}': ${msg}`)
+        appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
+          event_type: 'nextcloud_reconcile_skipped',
+          source_type: 'nextcloud_tag',
+          source_ref: sourceRef,
+          reason: msg
+        })
+        source.nextcloudDiscovery = { skipped: true, skipReason: msg }
+        log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)
+        continue
+      }
+      throw err
     }
-    appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
-      event_type: 'nextcloud_discovery',
-      source_type: 'nextcloud_tag',
-      source_ref: sourceRef,
-      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length},disabled_missing:${disabledRows.length},reenabled:${reenabledRows.length}`
-    })
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)
   }

@@ -1,7 +1,8 @@
 import { spawn } from 'child_process'
 
-import Database from 'better-sqlite3'
 import Logger from '@home-gallery/logger'
+
+import { selectMediaRowsForGalleryEntry } from '../database/gallery-media-state-resolve.js'
 
 const log = Logger('server.api.events.nextcloudOcc')
 
@@ -29,37 +30,7 @@ const runOccDeleteTag = (occCommand, fileId, tagName) => {
   })
 }
 
-const getOccTargets = (dbPath, targetIds) => {
-  const db = new Database(dbPath, { readonly: true })
-  try {
-    const statement = db.prepare(`
-      SELECT entry_id, target_file_id, origin_tag
-      FROM media
-      WHERE entry_id = @entry_id
-        AND source_type = 'nextcloud_tag'
-        AND origin_mode = 'file_tag'
-        AND target_file_id IS NOT NULL
-    `)
-
-    const targets = []
-    for (const entryId of targetIds || []) {
-      const row = statement.get({ entry_id: entryId })
-      if (!row?.target_file_id || !row?.origin_tag) {
-        continue
-      }
-      targets.push({
-        entryId,
-        fileId: row.target_file_id,
-        tagName: row.origin_tag
-      })
-    }
-    return targets
-  } finally {
-    db.close()
-  }
-}
-
-export const applyNextcloudOccRemoveFromFrame = async (config, event) => {
+export const applyNextcloudOccRemoveFromFrame = async (config, event, getGalleryEntry) => {
   if (!hasRemoveFromFrame(event)) {
     return
   }
@@ -76,14 +47,26 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event) => {
     return
   }
 
-  const targets = getOccTargets(dbPath, event.targetIds)
-  if (!targets.length) {
-    return
-  }
-
   const unique = new Map()
-  for (const target of targets) {
-    unique.set(`${target.fileId}:${target.tagName}`, target)
+  for (const entryId of event.targetIds || []) {
+    const galleryEntry = getGalleryEntry?.(entryId)
+    if (!galleryEntry) {
+      continue
+    }
+    const rows = selectMediaRowsForGalleryEntry(dbPath, config, galleryEntry)
+    for (const row of rows) {
+      if (row.source_type !== 'nextcloud_tag' || row.origin_mode !== 'file_tag') {
+        continue
+      }
+      if (!row.target_file_id || !row.origin_tag) {
+        continue
+      }
+      unique.set(`${row.target_file_id}:${row.origin_tag}`, {
+        fileId: row.target_file_id,
+        tagName: row.origin_tag,
+        entryId: row.entry_id
+      })
+    }
   }
 
   for (const target of unique.values()) {

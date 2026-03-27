@@ -20,24 +20,36 @@ const removeEntryFile = <T extends Taggable>(data: T, event: Event, eventsFileNa
   return true;
 }
 
-const applyEventAction = <T extends Taggable>(data: T, action: EventAction, event: Event, eventsFileName: PathLike): boolean => {
+type ApplyEventsServerOptions = {
+  skipRemoveFromFrameFile?: boolean
+}
+
+const applyEventAction = <T extends Taggable>(data: T, action: EventAction, event: Event, eventsFileName: PathLike, options?: ApplyEventsServerOptions): boolean => {
   let changed = false;
   switch (action.action) {
     case 'addTag': {
+      const tagValue = action.value ?? ''
+      if (!tagValue) {
+        break
+      }
       if (!data.tags) {
         data.tags = [];
       }
-      if (data.tags.indexOf(action.value) < 0) {
-        data.tags.push(action.value);
+      if (data.tags.indexOf(tagValue) < 0) {
+        data.tags.push(tagValue);
         changed = true;
       }
       break;
     }
     case 'removeTag': {
+      const removeValue = action.value ?? ''
+      if (!removeValue) {
+        return false;
+      }
       if (!data.tags || !data.tags.length) {
         return false;
       }
-      const index = data.tags.indexOf(action.value);
+      const index = data.tags.indexOf(removeValue);
       if (index >= 0) {
         data.tags.splice(index, 1);
         changed = true;
@@ -49,7 +61,11 @@ const applyEventAction = <T extends Taggable>(data: T, action: EventAction, even
       break;
     }
     case 'removeFromFrame': {
-      changed = removeEntryFile(data, event, eventsFileName) || changed;
+      if (options?.skipRemoveFromFrameFile) {
+        changed = true;
+      } else {
+        changed = removeEntryFile(data, event, eventsFileName) || changed;
+      }
       break;
     }
   }
@@ -86,7 +102,7 @@ const flattenReducer = (result: Taggable[], entry: Taggable[]) => {
   return result
 }
 
-export const applyEvents = (entries: Taggable[], events: Event[], eventsFilename: PathLike): Taggable[] => {
+export const applyEvents = (entries: Taggable[], events: Event[], eventsFilename: PathLike, options?: ApplyEventsServerOptions): Taggable[] => {
   // on server side duplicated entries ids may exists
   const id2Entries: EntryIdMap = entries.reduce(idMapReducer, {} as EntryIdMap)
 
@@ -102,7 +118,7 @@ export const applyEvents = (entries: Taggable[], events: Event[], eventsFilename
     targetEntries.forEach(entry => {
       let changed = false;
       event.actions.forEach(action => {
-        changed = applyEventAction(entry, action, event, eventsFilename) || changed;
+        changed = applyEventAction(entry, action, event, eventsFilename, options) || changed;
       });
 
       if (!entry.appliedEventIds) {

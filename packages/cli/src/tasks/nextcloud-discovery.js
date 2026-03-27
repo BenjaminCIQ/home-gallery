@@ -2,6 +2,10 @@ import Logger from '@home-gallery/logger'
 
 const log = Logger('cli.task.nextcloudDiscovery')
 
+export const NEXTCLOUD_RECONCILE_SKIP_PREFIX = 'nextcloud_reconcile_skip:'
+
+const skipError = reason => new Error(`${NEXTCLOUD_RECONCILE_SKIP_PREFIX}${reason}`)
+
 const normalizeBaseUrl = baseUrl => (baseUrl || '').replace(/\/+$/, '')
 
 const toBase64 = value => Buffer.from(value, 'utf8').toString('base64')
@@ -118,23 +122,28 @@ const parseDavFileRows = ({ xml, username }) => {
 
 const fetchNextcloudTagId = async ({ baseUrl, username, appPassword, tagName }) => {
   const url = buildSystemTagsUrl({ baseUrl })
-  const response = await fetch(url, {
-    method: 'PROPFIND',
-    headers: {
-      Authorization: buildAuthHeader({ username, appPassword }),
-      Depth: '1',
-      'Content-Type': 'application/xml'
-    },
-    body: `<?xml version="1.0"?>
+  let response
+  try {
+    response = await fetch(url, {
+      method: 'PROPFIND',
+      headers: {
+        Authorization: buildAuthHeader({ username, appPassword }),
+        Depth: '1',
+        'Content-Type': 'application/xml'
+      },
+      body: `<?xml version="1.0"?>
 <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
   <d:prop>
     <oc:id/>
     <oc:display-name/>
   </d:prop>
 </d:propfind>`
-  })
+    })
+  } catch (err) {
+    throw skipError(`network:systemtags:${err.message || err}`)
+  }
   if (!response.ok) {
-    throw new Error(`Nextcloud system tag lookup failed with status ${response.status}`)
+    throw skipError(`http:systemtags:${response.status}`)
   }
   const xml = await response.text()
   return extractTagId(xml, tagName)
@@ -155,19 +164,20 @@ export const discoverNextcloudTagTargets = async (source, config) => {
 
   const tagId = await fetchNextcloudTagId({ baseUrl, username, appPassword, tagName })
   if (!tagId) {
-    log.warn(`Nextcloud tag '${tagName}' not found for source '${source.name || source.index}'`)
-    return []
+    throw skipError(`tag_not_found:${tagName}`)
   }
 
   const userRoot = buildDavRootUrl({ baseUrl, username })
-  const reportResponse = await fetch(userRoot, {
-    method: 'REPORT',
-    headers: {
-      Authorization: buildAuthHeader({ username, appPassword }),
-      Depth: 'infinity',
-      'Content-Type': 'application/xml'
-    },
-    body: `<?xml version="1.0"?>
+  let reportResponse
+  try {
+    reportResponse = await fetch(userRoot, {
+      method: 'REPORT',
+      headers: {
+        Authorization: buildAuthHeader({ username, appPassword }),
+        Depth: 'infinity',
+        'Content-Type': 'application/xml'
+      },
+      body: `<?xml version="1.0"?>
 <oc:filter-files xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns" xmlns:ocs="http://open-collaboration-services.org/ns">
   <d:prop>
     <d:resourcetype/>
@@ -178,10 +188,13 @@ export const discoverNextcloudTagTargets = async (source, config) => {
     <oc:systemtag>${tagId}</oc:systemtag>
   </oc:filter-rules>
 </oc:filter-files>`
-  })
+    })
+  } catch (err) {
+    throw skipError(`network:tag_report:${err.message || err}`)
+  }
 
   if (!reportResponse.ok) {
-    throw new Error(`Nextcloud tagged target report failed for '${tagName}' with status ${reportResponse.status}`)
+    throw skipError(`http:tag_report:${reportResponse.status}`)
   }
 
   const xml = await reportResponse.text()
@@ -220,13 +233,15 @@ export const discoverNextcloudTaggedFiles = async (source, config, tagTargets = 
   const expandedFiles = []
   for (const folder of folderTargets) {
     const folderUrl = `${userRoot}${encodeDavPath(folder.target_path)}/`
-    const response = await fetch(folderUrl, {
-      method: 'PROPFIND',
-      headers: {
-        ...authHeaders,
-        Depth: 'infinity'
-      },
-      body: `<?xml version="1.0"?>
+    let response
+    try {
+      response = await fetch(folderUrl, {
+        method: 'PROPFIND',
+        headers: {
+          ...authHeaders,
+          Depth: 'infinity'
+        },
+        body: `<?xml version="1.0"?>
 <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">
   <d:prop>
     <d:resourcetype/>
@@ -234,9 +249,12 @@ export const discoverNextcloudTaggedFiles = async (source, config, tagTargets = 
     <oc:fileid/>
   </d:prop>
 </d:propfind>`
-    })
+      })
+    } catch (err) {
+      throw skipError(`network:folder_expand:${folder.target_path}:${err.message || err}`)
+    }
     if (!response.ok) {
-      throw new Error(`Nextcloud folder expansion failed for '${folder.target_path}' with status ${response.status}`)
+      throw skipError(`http:folder_expand:${folder.target_path}:${response.status}`)
     }
     const xml = await response.text()
     const rows = parseDavFileRows({ xml, username })

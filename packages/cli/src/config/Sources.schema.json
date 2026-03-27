@@ -92,6 +92,10 @@
             "description": "Optional Nextcloud folder prefix filter for nextcloud_tag sources",
             "type": "string"
           },
+          "localDir": {
+            "description": "Local Nextcloud sync root on disk for nextcloud_tag sources (WebDAV materialization reads from here; gallery indexes the projection dir)",
+            "type": "string"
+          },
           "projectionSubdir": {
             "description": "Optional projection subdirectory for this source",
             "type": "string"

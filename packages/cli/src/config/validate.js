@@ -49,7 +49,7 @@ const validateNextcloudProjection = (config, sources) => {
 
   for (const source of nextcloudSources) {
     source.tag || assertError(`Source '${source.name || source.index}' with type nextcloud_tag requires 'tag'`)
-    source.dir || assertError(`Source '${source.name || source.index}' with type nextcloud_tag requires 'dir' pointing to local Nextcloud sync root`)
+    source.localDir || assertError(`Source '${source.name || source.index}' with type nextcloud_tag requires 'localDir' pointing to local Nextcloud sync root`)
   }
 }
 

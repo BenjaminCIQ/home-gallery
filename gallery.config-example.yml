@@ -122,6 +122,8 @@
     #type: nextcloud_tag
     # Nextcloud selection tag when type is nextcloud_tag
     #tag: photoframe
+    # Local Nextcloud sync folder (required for nextcloud_tag); gallery indexes the projection tree under nextcloudProjection.root
+    #localDir: /path/to/nextcloud/sync
     # Optional folder prefix filter for nextcloud_tag
     #namedFolder: Uploads/PhotoFrame
     # Optional source-specific projection folder below nextcloudProjection.root

@@ -1,5 +1,9 @@
 import Database from 'better-sqlite3'
+import path from 'path'
+
 import Logger from '@home-gallery/logger'
+
+import { collectMediaRowsForGalleryEntryOnDb, matchSourceByDirectoryPrefix } from '../database/gallery-media-state-resolve.js'
 
 const log = Logger('server.api.events.mediaState')
 
@@ -19,7 +23,38 @@ const hasMediaTable = db => {
   return !!row
 }
 
-export const applyMediaStateLifecycleEvent = async (config, event) => {
+const normalizeRel = rel => rel.split(path.sep).join('/')
+
+const ensureLocalMediaRow = (config, galleryEntry, now) => {
+  const filepath = galleryEntry?.files?.[0]?.filepath
+  if (!filepath) {
+    return null
+  }
+  const abs = path.normalize(filepath)
+  const locals = (config.sources || []).filter(s => !s.type || s.type === 'local_folder')
+  const match = matchSourceByDirectoryPrefix(locals, abs)
+  if (!match) {
+    return null
+  }
+  const rel = normalizeRel(path.relative(match.root, abs))
+  const sourceRef = match.source.name || match.source.index
+  const fingerprint = `local:${sourceRef}:${rel}`
+  return {
+    entry_id: galleryEntry.id,
+    source_type: 'local_folder',
+    source_ref: sourceRef,
+    file_path: rel,
+    file_fingerprint: fingerprint,
+    target_file_id: null,
+    origin_tag: null,
+    origin_mode: 'none',
+    origin_folder_path: null,
+    created_at: now,
+    updated_at: now
+  }
+}
+
+export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEntry) => {
   const actions = getRelevantActions(event)
   if (!actions.length) {
     return
@@ -39,11 +74,6 @@ export const applyMediaStateLifecycleEvent = async (config, event) => {
       return
     }
 
-    const selectByEntryId = db.prepare(`
-      SELECT id, entry_id, file_fingerprint, source_type, source_ref, file_path, state
-      FROM media
-      WHERE entry_id = @entry_id
-    `)
     const setDisabled = db.prepare(`
       UPDATE media
       SET state = 'disabled',
@@ -65,10 +95,45 @@ export const applyMediaStateLifecycleEvent = async (config, event) => {
         @event_type, @entry_id, @fingerprint, @source_type, @source_ref, @file_path, @from_state, @to_state, @reason, @created_at
       )
     `)
+    const insertMedia = db.prepare(`
+      INSERT INTO media (
+        entry_id, source_type, source_ref, file_path, file_fingerprint, target_file_id, origin_tag, origin_mode, origin_folder_path,
+        state, disabled_at, deleted_at, last_seen_at, created_at, updated_at
+      ) VALUES (
+        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @target_file_id, @origin_tag, @origin_mode, @origin_folder_path,
+        @state, @disabled_at, @deleted_at, @last_seen_at, @created_at, @updated_at
+      )
+      ON CONFLICT(source_type, file_fingerprint) DO UPDATE SET
+        entry_id=excluded.entry_id,
+        source_ref=excluded.source_ref,
+        file_path=excluded.file_path,
+        state=excluded.state,
+        disabled_at=excluded.disabled_at,
+        updated_at=excluded.updated_at
+    `)
 
     const tx = db.transaction(() => {
       for (const entryId of event.targetIds || []) {
-        const rows = selectByEntryId.all({ entry_id: entryId })
+        const galleryEntry = getGalleryEntry?.(entryId)
+        if (!galleryEntry) {
+          continue
+        }
+
+        let rows = collectMediaRowsForGalleryEntryOnDb(db, config, galleryEntry)
+        if (!rows.length && actions.includes(ACTION_REMOVE)) {
+          const localRow = ensureLocalMediaRow(config, galleryEntry, now)
+          if (localRow) {
+            insertMedia.run({
+              ...localRow,
+              state: 'disabled',
+              disabled_at: now,
+              deleted_at: null,
+              last_seen_at: now
+            })
+            rows = collectMediaRowsForGalleryEntryOnDb(db, config, galleryEntry)
+          }
+        }
+
         for (const row of rows) {
           let currentState = row.state
           for (const action of actions) {
@@ -93,6 +158,9 @@ export const applyMediaStateLifecycleEvent = async (config, event) => {
             }
 
             if (action === ACTION_RESTORE) {
+              if (row.origin_mode === 'folder_tag' && row.source_type === 'nextcloud_tag') {
+                continue
+              }
               if (currentState === 'disabled') {
                 setActive.run({ id: row.id, updated_at: now })
                 appendEvent.run({

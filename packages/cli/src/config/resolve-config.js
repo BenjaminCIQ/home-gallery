@@ -5,7 +5,7 @@ export const resolveConfig = (config, baseDir, env) => {
 
   const sources = config.sources || [];
   for (const source of sources) {
-    resolveAll(source, ['dir', 'index', 'excludeIfPresent', 'excludeFromFile', 'trashPath'], config, baseDir, env)
+    resolveAll(source, ['dir', 'localDir', 'index', 'excludeIfPresent', 'excludeFromFile', 'trashPath'], config, baseDir, env)
   }
 
   resolveAll(config, ['storage.dir', 'database.file', 'events.file', 'server.key', 'server.cert', 'nextcloudProjection.root', 'mediaState.dbPath', 'mediaState.localTrashPath'], config, baseDir, env)

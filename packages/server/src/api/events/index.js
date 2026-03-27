@@ -17,6 +17,14 @@ import { sendError } from '../error/index.js';
  */
 export async function eventsApi(context) {
   const { config, eventbus, router } = context
+
+  const getGalleryEntry = entryId => {
+    const db = context.database?.read?.()
+    if (!db?.data) {
+      return undefined
+    }
+    return db.data.find(e => e.id === entryId)
+  }
   const eventsFilename = config.events.file
   let clients = [];
   let events = false;
@@ -113,14 +121,14 @@ export async function eventsApi(context) {
     }
     appendEvent(eventsFilename, event)
       .then(() => {
-        return applyMediaStateLifecycleEvent(config, event)
+        return applyMediaStateLifecycleEvent(config, event, getGalleryEntry)
           .catch(err => {
             log.warn(err, `Failed to apply media_state lifecycle side effects for event ${event.id}`)
           })
           .then(() => event)
       })
       .then(() => {
-        return applyNextcloudOccRemoveFromFrame(config, event)
+        return applyNextcloudOccRemoveFromFrame(config, event, getGalleryEntry)
           .catch(err => {
             log.warn(err, `Failed to apply OCC removeFromFrame side effects for event ${event.id}`)
           })
