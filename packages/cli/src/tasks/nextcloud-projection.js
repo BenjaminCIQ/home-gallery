@@ -177,6 +177,7 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       source_ref: sourceRef,
       file_path: row.target_path,
       file_fingerprint: buildFingerprint(row),
+      target_file_id: row.target_file_id || null,
       origin_tag: source.tag,
       origin_mode: row.origin_mode,
       origin_folder_path: row.origin_folder_path,

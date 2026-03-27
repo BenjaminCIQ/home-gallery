@@ -18,6 +18,7 @@ const initSchema = db => {
       source_ref TEXT,
       file_path TEXT NOT NULL,
       file_fingerprint TEXT NOT NULL,
+      target_file_id TEXT,
       origin_tag TEXT,
       origin_mode TEXT CHECK(origin_mode IN ('file_tag', 'folder_tag', 'none')),
       origin_folder_path TEXT,
@@ -76,6 +77,12 @@ const initSchema = db => {
     CREATE INDEX IF NOT EXISTS events_created_at_idx
       ON events(created_at);
   `)
+
+  const columns = db.prepare(`PRAGMA table_info(media)`).all()
+  const hasTargetFileId = columns.some(column => column.name === 'target_file_id')
+  if (!hasTargetFileId) {
+    db.exec(`ALTER TABLE media ADD COLUMN target_file_id TEXT`)
+  }
 }
 
 const getNow = () => new Date().toISOString()
@@ -140,16 +147,17 @@ export const upsertMediaStateEntry = (dbPath, entry) => {
   return withDb(dbPath, db => {
     const statement = db.prepare(`
       INSERT INTO media (
-        entry_id, source_type, source_ref, file_path, file_fingerprint, origin_tag, origin_mode, origin_folder_path,
+        entry_id, source_type, source_ref, file_path, file_fingerprint, target_file_id, origin_tag, origin_mode, origin_folder_path,
         state, disabled_at, deleted_at, last_seen_at, created_at, updated_at
       ) VALUES (
-        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @origin_tag, @origin_mode, @origin_folder_path,
+        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @target_file_id, @origin_tag, @origin_mode, @origin_folder_path,
         @state, @disabled_at, @deleted_at, @last_seen_at, @created_at, @updated_at
       )
       ON CONFLICT(source_type, file_fingerprint) DO UPDATE SET
         entry_id=excluded.entry_id,
         source_ref=excluded.source_ref,
         file_path=excluded.file_path,
+        target_file_id=excluded.target_file_id,
         origin_tag=excluded.origin_tag,
         origin_mode=excluded.origin_mode,
         origin_folder_path=excluded.origin_folder_path,
@@ -175,6 +183,7 @@ export const upsertMediaStateEntry = (dbPath, entry) => {
       source_ref: entry.source_ref || null,
       file_path: entry.file_path,
       file_fingerprint: entry.file_fingerprint,
+      target_file_id: entry.target_file_id || null,
       origin_tag: entry.origin_tag || null,
       origin_mode: entry.origin_mode || 'none',
       origin_folder_path: entry.origin_folder_path || null,
@@ -193,16 +202,17 @@ export const upsertMediaStateEntries = (dbPath, entries) => {
   return withDb(dbPath, db => {
     const statement = db.prepare(`
       INSERT INTO media (
-        entry_id, source_type, source_ref, file_path, file_fingerprint, origin_tag, origin_mode, origin_folder_path,
+        entry_id, source_type, source_ref, file_path, file_fingerprint, target_file_id, origin_tag, origin_mode, origin_folder_path,
         state, disabled_at, deleted_at, last_seen_at, created_at, updated_at
       ) VALUES (
-        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @origin_tag, @origin_mode, @origin_folder_path,
+        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @target_file_id, @origin_tag, @origin_mode, @origin_folder_path,
         @state, @disabled_at, @deleted_at, @last_seen_at, @created_at, @updated_at
       )
       ON CONFLICT(source_type, file_fingerprint) DO UPDATE SET
         entry_id=excluded.entry_id,
         source_ref=excluded.source_ref,
         file_path=excluded.file_path,
+        target_file_id=excluded.target_file_id,
         origin_tag=excluded.origin_tag,
         origin_mode=excluded.origin_mode,
         origin_folder_path=excluded.origin_folder_path,
@@ -230,6 +240,7 @@ export const upsertMediaStateEntries = (dbPath, entries) => {
           source_ref: entry.source_ref || null,
           file_path: entry.file_path,
           file_fingerprint: entry.file_fingerprint,
+          target_file_id: entry.target_file_id || null,
           origin_tag: entry.origin_tag || null,
           origin_mode: entry.origin_mode || 'none',
           origin_folder_path: entry.origin_folder_path || null,
