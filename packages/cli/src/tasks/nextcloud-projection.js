@@ -6,6 +6,7 @@ import {
   appendMediaStateEvent,
   disableMissingNextcloudMediaEntries,
   listActiveNextcloudMediaEntries,
+  reenableEligibleNextcloudMediaEntries,
   replaceMediaStateTagSnapshot,
   upsertMediaStateEntries
 } from './media-state-db.js'
@@ -170,7 +171,7 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
     replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagTargets)
     const fileCandidates = await discoverNextcloudTaggedFiles(source, options?.config, tagTargets)
     const sourceRef = source.name || source.index
-    upsertMediaStateEntries(options?.config?.mediaState?.dbPath, fileCandidates.map(row => ({
+    const candidateEntries = fileCandidates.map(row => ({
       entry_id: buildEntryId(sourceRef, row.target_path),
       source_type: 'nextcloud_tag',
       source_ref: sourceRef,
@@ -180,7 +181,14 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       origin_mode: row.origin_mode,
       origin_folder_path: row.origin_folder_path,
       state: 'active'
-    })))
+    }))
+    upsertMediaStateEntries(options?.config?.mediaState?.dbPath, candidateEntries)
+    const reenabledRows = reenableEligibleNextcloudMediaEntries(
+      options?.config?.mediaState?.dbPath,
+      sourceRef,
+      source.tag,
+      candidateEntries
+    )
     const seenFingerprints = fileCandidates.map(buildFingerprint)
     const disabledRows = disableMissingNextcloudMediaEntries(
       options?.config?.mediaState?.dbPath,
@@ -199,6 +207,7 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       taggedTargetCount: tagTargets.length,
       fileCandidateCount: fileCandidates.length,
       disabledMissingCount: disabledRows.length,
+      reenabledCount: reenabledRows.length,
       materializedCount: projection.materializedCount,
       removedProjectedCount: projection.removedCount
     }
@@ -206,7 +215,7 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
       event_type: 'nextcloud_discovery',
       source_type: 'nextcloud_tag',
       source_ref: sourceRef,
-      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length},disabled_missing:${disabledRows.length}`
+      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length},disabled_missing:${disabledRows.length},reenabled:${reenabledRows.length}`
     })
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)

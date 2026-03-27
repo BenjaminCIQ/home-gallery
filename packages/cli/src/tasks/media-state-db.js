@@ -389,3 +389,90 @@ export const listActiveNextcloudMediaEntries = (dbPath, sourceRef, originTag) =>
     })
   })
 }
+
+export const reenableEligibleNextcloudMediaEntries = (dbPath, sourceRef, originTag, candidates) => {
+  const now = getNow()
+  return withDb(dbPath, db => {
+    const disabledRows = db.prepare(`
+      SELECT id, file_fingerprint, disabled_at
+      FROM media
+      WHERE source_type = 'nextcloud_tag'
+        AND source_ref = @source_ref
+        AND origin_tag = @origin_tag
+        AND state = 'disabled'
+    `).all({
+      source_ref: sourceRef,
+      origin_tag: originTag
+    })
+
+    if (!disabledRows.length) {
+      return []
+    }
+
+    const candidateByFingerprint = new Map()
+    for (const candidate of candidates || []) {
+      candidateByFingerprint.set(candidate.file_fingerprint, candidate)
+    }
+
+    const getFolderTagStatus = db.prepare(`
+      SELECT status_changed_at
+      FROM tags
+      WHERE source_type = 'nextcloud_tag'
+        AND tag_name = @tag_name
+        AND target_type = 'folder'
+        AND target_path = @target_path
+        AND status = 'active'
+      LIMIT 1
+    `)
+
+    const toEnable = []
+    for (const row of disabledRows) {
+      const candidate = candidateByFingerprint.get(row.file_fingerprint)
+      if (!candidate) {
+        continue
+      }
+
+      if (candidate.origin_mode === 'file_tag') {
+        toEnable.push(row)
+        continue
+      }
+
+      if (candidate.origin_mode !== 'folder_tag' || !candidate.origin_folder_path) {
+        continue
+      }
+
+      const folderTag = getFolderTagStatus.get({
+        tag_name: originTag,
+        target_path: candidate.origin_folder_path
+      })
+      if (!folderTag?.status_changed_at || !row.disabled_at) {
+        continue
+      }
+      if (folderTag.status_changed_at > row.disabled_at) {
+        toEnable.push(row)
+      }
+    }
+
+    if (!toEnable.length) {
+      return []
+    }
+
+    const update = db.prepare(`
+      UPDATE media
+      SET state = 'active',
+          disabled_at = NULL,
+          updated_at = @updated_at
+      WHERE id = @id
+    `)
+    const tx = db.transaction(rows => {
+      for (const row of rows) {
+        update.run({
+          id: row.id,
+          updated_at: now
+        })
+      }
+    })
+    tx(toEnable)
+    return toEnable
+  })
+}
