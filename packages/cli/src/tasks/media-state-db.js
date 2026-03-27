@@ -78,6 +78,8 @@ const initSchema = db => {
   `)
 }
 
+const getNow = () => new Date().toISOString()
+
 export const initMediaStateDb = async dbPath => {
   if (!dbPath) {
     throw new Error(`mediaState.dbPath is required`)
@@ -93,4 +95,125 @@ export const initMediaStateDb = async dbPath => {
   }
 
   log.debug(`Initialized media_state database schema at ${dbPath}`)
+}
+
+const withDb = (dbPath, fn) => {
+  const db = new Database(dbPath)
+  try {
+    return fn(db)
+  } finally {
+    db.close()
+  }
+}
+
+export const upsertMediaStateTag = (dbPath, tag) => {
+  const now = getNow()
+  return withDb(dbPath, db => {
+    const statement = db.prepare(`
+      INSERT INTO tags (
+        source_type, tag_name, target_type, target_path, target_file_id, status, status_changed_at, observed_at
+      ) VALUES (
+        @source_type, @tag_name, @target_type, @target_path, @target_file_id, @status, @status_changed_at, @observed_at
+      )
+      ON CONFLICT(source_type, tag_name, target_type, target_path) DO UPDATE SET
+        target_file_id=excluded.target_file_id,
+        status=excluded.status,
+        status_changed_at=excluded.status_changed_at,
+        observed_at=excluded.observed_at
+    `)
+
+    statement.run({
+      source_type: tag.source_type || 'nextcloud_tag',
+      tag_name: tag.tag_name,
+      target_type: tag.target_type,
+      target_path: tag.target_path,
+      target_file_id: tag.target_file_id || null,
+      status: tag.status || 'active',
+      status_changed_at: tag.status_changed_at || now,
+      observed_at: tag.observed_at || now
+    })
+  })
+}
+
+export const upsertMediaStateEntry = (dbPath, entry) => {
+  const now = getNow()
+  return withDb(dbPath, db => {
+    const statement = db.prepare(`
+      INSERT INTO media (
+        entry_id, source_type, source_ref, file_path, file_fingerprint, origin_tag, origin_mode, origin_folder_path,
+        state, disabled_at, deleted_at, last_seen_at, created_at, updated_at
+      ) VALUES (
+        @entry_id, @source_type, @source_ref, @file_path, @file_fingerprint, @origin_tag, @origin_mode, @origin_folder_path,
+        @state, @disabled_at, @deleted_at, @last_seen_at, @created_at, @updated_at
+      )
+      ON CONFLICT(source_type, file_fingerprint) DO UPDATE SET
+        entry_id=excluded.entry_id,
+        source_ref=excluded.source_ref,
+        file_path=excluded.file_path,
+        origin_tag=excluded.origin_tag,
+        origin_mode=excluded.origin_mode,
+        origin_folder_path=excluded.origin_folder_path,
+        state=excluded.state,
+        disabled_at=excluded.disabled_at,
+        deleted_at=excluded.deleted_at,
+        last_seen_at=excluded.last_seen_at,
+        updated_at=excluded.updated_at
+    `)
+
+    statement.run({
+      entry_id: entry.entry_id,
+      source_type: entry.source_type,
+      source_ref: entry.source_ref || null,
+      file_path: entry.file_path,
+      file_fingerprint: entry.file_fingerprint,
+      origin_tag: entry.origin_tag || null,
+      origin_mode: entry.origin_mode || 'none',
+      origin_folder_path: entry.origin_folder_path || null,
+      state: entry.state || 'active',
+      disabled_at: entry.disabled_at || null,
+      deleted_at: entry.deleted_at || null,
+      last_seen_at: entry.last_seen_at || now,
+      created_at: entry.created_at || now,
+      updated_at: entry.updated_at || now
+    })
+  })
+}
+
+export const appendMediaStateEvent = (dbPath, event) => {
+  return withDb(dbPath, db => {
+    const statement = db.prepare(`
+      INSERT INTO events (
+        event_type, entry_id, fingerprint, source_type, source_ref, file_path, from_state, to_state, reason, created_at
+      ) VALUES (
+        @event_type, @entry_id, @fingerprint, @source_type, @source_ref, @file_path, @from_state, @to_state, @reason, @created_at
+      )
+    `)
+
+    statement.run({
+      event_type: event.event_type,
+      entry_id: event.entry_id || null,
+      fingerprint: event.fingerprint || null,
+      source_type: event.source_type || null,
+      source_ref: event.source_ref || null,
+      file_path: event.file_path || null,
+      from_state: event.from_state || null,
+      to_state: event.to_state || null,
+      reason: event.reason || null,
+      created_at: event.created_at || getNow()
+    })
+  })
+}
+
+export const listActiveTagsBySource = (dbPath, sourceTagName) => {
+  return withDb(dbPath, db => {
+    const statement = db.prepare(`
+      SELECT *
+      FROM tags
+      WHERE source_type = 'nextcloud_tag'
+        AND tag_name = @tag_name
+        AND status = 'active'
+      ORDER BY target_type, target_path
+    `)
+    return statement.all({ tag_name: sourceTagName })
+  })
 }

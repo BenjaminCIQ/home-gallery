@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import Logger from '@home-gallery/logger'
+import { appendMediaStateEvent } from './media-state-db.js'
 import { discoverNextcloudSourceCandidates } from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
@@ -47,6 +48,12 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
 
     const discovery = await discoverNextcloudSourceCandidates(source, options?.config)
     source.nextcloudDiscovery = { hrefCount: discovery.hrefs.length }
+    appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
+      event_type: 'nextcloud_discovery',
+      source_type: 'nextcloud_tag',
+      source_ref: source.name || source.index,
+      reason: `discovered_hrefs:${discovery.hrefs.length}`
+    })
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)
   }
