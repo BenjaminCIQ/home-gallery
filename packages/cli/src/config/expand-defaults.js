@@ -27,12 +27,24 @@ export const expandConfigDefaults = (config, env) => {
     for (const i in config.sources) {
       const dir = config.sources[i]
       const source = typeof dir == 'string' ? { dir } : dir
-      config.sources[i] = Object.assign({
-        index: '{configDir}/{configPrefix}{basename(dir)}.idx',
+      const isNextcloudTagSource = source.type === 'nextcloud_tag'
+      const defaultName = source.name || `source_${i}`
+      const defaults = {
         offline: false,
         downloadable: false,
         excludeIfPresent: '.galleryignore'
-      }, source)
+      }
+
+      if (isNextcloudTagSource) {
+        defaults.index = `{configDir}/{configPrefix}${defaultName}.idx`
+        defaults.stagingSubdir = source.stagingSubdir || defaultName
+        defaults.dir = `{nextcloudProjection.stagingRoot}/${defaults.stagingSubdir}`
+        defaults.materializationMode = source.materializationMode || config.nextcloudProjection?.materializationMode || 'auto'
+      } else {
+        defaults.index = '{configDir}/{configPrefix}{basename(dir)}.idx'
+      }
+
+      config.sources[i] = Object.assign(defaults, source)
     }
   } else {
     config.sources = []
@@ -83,6 +95,21 @@ export const expandConfigDefaults = (config, env) => {
   config.events = {
     file: '{configDir}/{configPrefix}events.db',
     ...config.events
+  }
+
+  config.nextcloudProjection = {
+    stagingRoot: '{cacheDir}/nextcloud-staging',
+    materializationMode: 'auto',
+    cleanupRemoved: true,
+    hashValidation: 'etag',
+    ...config.nextcloudProjection
+  }
+
+  config.mediaState = {
+    dbPath: '{configDir}/{configPrefix}media-state.db',
+    localRemovalPolicy: 'trash',
+    localTrashPath: '{cacheDir}/trash',
+    ...config.mediaState
   }
 
   config.logger = config.logger || [

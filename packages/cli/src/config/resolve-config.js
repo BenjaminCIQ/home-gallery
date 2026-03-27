@@ -5,10 +5,10 @@ export const resolveConfig = (config, baseDir, env) => {
 
   const sources = config.sources || [];
   for (const source of sources) {
-    resolveAll(source, ['dir', 'index', 'excludeIfPresent', 'excludeFromFile'], config, baseDir, env)
+    resolveAll(source, ['dir', 'index', 'excludeIfPresent', 'excludeFromFile', 'trashPath'], config, baseDir, env)
   }
 
-  resolveAll(config, ['storage.dir', 'database.file', 'events.file', 'server.key', 'server.cert'], config, baseDir, env)
+  resolveAll(config, ['storage.dir', 'database.file', 'events.file', 'server.key', 'server.cert', 'nextcloudProjection.stagingRoot', 'mediaState.dbPath', 'mediaState.localTrashPath'], config, baseDir, env)
 
   const loggers = config.logger || [];
   for (const logger of loggers) {
