@@ -137,6 +137,16 @@
     #trashPath: /path/to/photoframe-trash
 
 # Nextcloud projection settings (used when at least one source has type: nextcloud_tag)
+#nextcloud:
+  # Nextcloud base URL (without trailing slash)
+  #baseUrl: http://nextcloud.local
+  # Login username used for WebDAV
+  #username: your-username
+  # App password used for WebDAV authentication
+  #appPassword: your-app-password
+  # OCC command prefix used for removeFromFrame file-tag removal
+  #occCommand: sudo -u www-data php /var/www/html/nextcloud/occ
+
 #nextcloudProjection:
   # Base projection folder that Home Gallery indexes (via source dir mapping)
   #root: /path/to/nextcloud-projection

@@ -5,6 +5,7 @@ import Logger from '@home-gallery/logger'
 const log = Logger('server.api.events');
 
 import { readEvents, appendEvent } from '@home-gallery/events';
+import { applyNextcloudOccRemoveFromFrame } from './nextcloud-occ.js'
 
 import { sendError } from '../error/index.js';
 
@@ -110,6 +111,13 @@ export async function eventsApi(context) {
       event.date = new Date().toISOString();
     }
     appendEvent(eventsFilename, event)
+      .then(() => {
+        return applyNextcloudOccRemoveFromFrame(config, event)
+          .catch(err => {
+            log.warn(err, `Failed to apply OCC removeFromFrame side effects for event ${event.id}`)
+          })
+          .then(() => event)
+      })
       .then(() => {
         log.info(`Saved event ${event.id} to ${eventsFilename}`);
         if (events !== false) {

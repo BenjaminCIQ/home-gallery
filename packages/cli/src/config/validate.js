@@ -44,6 +44,7 @@ const validateNextcloudProjection = (config, sources) => {
   config.nextcloud?.baseUrl || assertError(`nextcloud.baseUrl is required when nextcloud_tag sources are configured`)
   config.nextcloud?.username || assertError(`nextcloud.username is required when nextcloud_tag sources are configured`)
   config.nextcloud?.appPassword || assertError(`nextcloud.appPassword is required when nextcloud_tag sources are configured`)
+  config.nextcloud?.occCommand || assertError(`nextcloud.occCommand is required when nextcloud_tag sources are configured`)
   config.nextcloudProjection?.root || assertError(`nextcloudProjection.root is required when nextcloud_tag sources are configured`)
 
   for (const source of nextcloudSources) {

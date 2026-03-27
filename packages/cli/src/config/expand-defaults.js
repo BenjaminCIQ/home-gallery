@@ -111,6 +111,10 @@ export const expandConfigDefaults = (config, env) => {
     ...config.mediaState
   }
 
+  config.nextcloud = {
+    ...config.nextcloud
+  }
+
   config.logger = config.logger || [
     {type: 'console', level: 'info'},
     {type: 'file', level: 'debug', file: '{configDir}/{configPrefix}gallery.log'}
