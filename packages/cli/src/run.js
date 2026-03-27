@@ -8,6 +8,7 @@ const log = Logger('cli.run')
 
 import { initConfig, defaultConfigFile, load } from './config/index.js'
 import { startServer, watchSources } from './tasks/index.js'
+import { reconcileProjectionSources } from './tasks/nextcloud-projection.js'
 
 const galleryDir = path.dirname(process.argv[1])
 
@@ -31,8 +32,10 @@ const runServer = options => {
   return startServer(options)
 }
 
-const runImport = (options) => {
-  const onlineSources = options.config.sources.filter(source => !source.offline)
+const runImport = async (options) => {
+  const allSources = options.config.sources || []
+  await reconcileProjectionSources(allSources, options)
+  const onlineSources = allSources.filter(source => !source.offline)
   const sourceDirs = onlineSources.map(source => source.dir)
 
   log.info(`Import online sources: ${sourceDirs.join(', ')}`)
