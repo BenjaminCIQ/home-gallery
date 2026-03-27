@@ -15,6 +15,8 @@ const buildDavRootUrl = ({ baseUrl, username }) => {
 
 const buildSystemTagsUrl = ({ baseUrl }) => `${normalizeBaseUrl(baseUrl)}/remote.php/dav/systemtags-assigned`
 
+const encodeDavPath = relPath => relPath.split('/').map(encodeURIComponent).join('/')
+
 const extractTagId = (xml, tagName) => {
   const responseRe = /<d:response[\s\S]*?<\/d:response>/g
   let response = responseRe.exec(xml)
@@ -32,7 +34,8 @@ const extractTagId = (xml, tagName) => {
 
 const parseTagTargetRows = ({ xml, username }) => {
   const rows = []
-  const basePath = `/remote.php/dav/files/${encodeURIComponent(username)}/`
+  const basePathEncoded = `/remote.php/dav/files/${encodeURIComponent(username)}/`
+  const basePathRaw = `/remote.php/dav/files/${username}/`
   const responseRe = /<d:response[\s\S]*?<\/d:response>/g
   let response = responseRe.exec(xml)
   while (response) {
@@ -44,7 +47,9 @@ const parseTagTargetRows = ({ xml, username }) => {
     }
 
     const decoded = decodeURIComponent(href)
-    const relPath = decoded.includes(basePath) ? decoded.split(basePath)[1] : null
+    const relPath = decoded.includes(basePathEncoded)
+      ? decoded.split(basePathEncoded)[1]
+      : (decoded.includes(basePathRaw) ? decoded.split(basePathRaw)[1] : null)
     if (!relPath || !relPath.length) {
       response = responseRe.exec(xml)
       continue
@@ -62,6 +67,50 @@ const parseTagTargetRows = ({ xml, username }) => {
       })
     }
 
+    response = responseRe.exec(xml)
+  }
+  return rows
+}
+
+const parseDavFileRows = ({ xml, username }) => {
+  const rows = []
+  const basePathEncoded = `/remote.php/dav/files/${encodeURIComponent(username)}/`
+  const basePathRaw = `/remote.php/dav/files/${username}/`
+  const responseRe = /<d:response[\s\S]*?<\/d:response>/g
+  let response = responseRe.exec(xml)
+  while (response) {
+    const chunk = response[0]
+    const href = chunk.match(/<d:href>([\s\S]*?)<\/d:href>/)?.[1]?.trim()
+    if (!href) {
+      response = responseRe.exec(xml)
+      continue
+    }
+
+    const isFolder = /<d:resourcetype>[\s\S]*?<d:collection\/>[\s\S]*?<\/d:resourcetype>/.test(chunk)
+    if (isFolder) {
+      response = responseRe.exec(xml)
+      continue
+    }
+
+    const decoded = decodeURIComponent(href)
+    const relPath = decoded.includes(basePathEncoded)
+      ? decoded.split(basePathEncoded)[1]
+      : (decoded.includes(basePathRaw) ? decoded.split(basePathRaw)[1] : null)
+    if (!relPath || !relPath.length) {
+      response = responseRe.exec(xml)
+      continue
+    }
+
+    const targetPath = relPath.replace(/\/+$/, '')
+    const targetFileId = chunk.match(/<oc:fileid>([\s\S]*?)<\/oc:fileid>/)?.[1]?.trim() || null
+    const etag = chunk.match(/<d:getetag>([\s\S]*?)<\/d:getetag>/)?.[1]?.trim() || null
+    if (targetPath) {
+      rows.push({
+        target_path: targetPath,
+        target_file_id: targetFileId,
+        etag
+      })
+    }
     response = responseRe.exec(xml)
   }
   return rows
@@ -144,4 +193,68 @@ export const discoverNextcloudTagTargets = async (source, config) => {
 
   log.debug(`Discovered ${filteredRows.length} tagged targets for '${source.name || source.index}'`)
   return filteredRows
+}
+
+export const discoverNextcloudTaggedFiles = async (source, config, tagTargets = null) => {
+  const baseUrl = config?.nextcloud?.baseUrl
+  const username = config?.nextcloud?.username
+  const appPassword = config?.nextcloud?.appPassword
+  if (!baseUrl || !username || !appPassword) {
+    throw new Error(`nextcloud.baseUrl, nextcloud.username and nextcloud.appPassword are required for native discovery`)
+  }
+
+  const targets = tagTargets || await discoverNextcloudTagTargets(source, config)
+  const userRoot = buildDavRootUrl({ baseUrl, username })
+  const authHeaders = {
+    Authorization: buildAuthHeader({ username, appPassword }),
+    'Content-Type': 'application/xml'
+  }
+
+  const fileTargets = targets.filter(row => row.target_type === 'file').map(row => ({
+    ...row,
+    origin_mode: 'file_tag',
+    origin_folder_path: null
+  }))
+  const folderTargets = targets.filter(row => row.target_type === 'folder')
+
+  const expandedFiles = []
+  for (const folder of folderTargets) {
+    const folderUrl = `${userRoot}${encodeDavPath(folder.target_path)}/`
+    const response = await fetch(folderUrl, {
+      method: 'PROPFIND',
+      headers: {
+        ...authHeaders,
+        Depth: 'infinity'
+      },
+      body: `<?xml version="1.0"?>
+<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">
+  <d:prop>
+    <d:resourcetype/>
+    <d:getetag/>
+    <oc:fileid/>
+  </d:prop>
+</d:propfind>`
+    })
+    if (!response.ok) {
+      throw new Error(`Nextcloud folder expansion failed for '${folder.target_path}' with status ${response.status}`)
+    }
+    const xml = await response.text()
+    const rows = parseDavFileRows({ xml, username })
+    for (const row of rows) {
+      expandedFiles.push({
+        ...row,
+        target_type: 'file',
+        origin_mode: 'folder_tag',
+        origin_folder_path: folder.target_path
+      })
+    }
+  }
+
+  const uniqueByPath = new Map()
+  for (const row of [...fileTargets, ...expandedFiles]) {
+    uniqueByPath.set(row.target_path, row)
+  }
+  const files = [...uniqueByPath.values()]
+  log.debug(`Expanded ${targets.length} tag targets into ${files.length} file candidates for '${source.name || source.index}'`)
+  return files
 }

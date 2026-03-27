@@ -2,8 +2,8 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import Logger from '@home-gallery/logger'
-import { appendMediaStateEvent, replaceMediaStateTagSnapshot } from './media-state-db.js'
-import { discoverNextcloudTagTargets } from './nextcloud-discovery.js'
+import { appendMediaStateEvent, replaceMediaStateTagSnapshot, upsertMediaStateEntries } from './media-state-db.js'
+import { discoverNextcloudTaggedFiles, discoverNextcloudTagTargets } from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
 
@@ -18,6 +18,8 @@ const getDefaultProjectionSubdir = (source, i) => {
 }
 
 const isNextcloudTagSource = source => source?.type === 'nextcloud_tag'
+const buildEntryId = (sourceRef, filePath) => `${sourceRef}:${filePath}`
+const buildFingerprint = row => `nextcloud:${row.target_file_id || row.target_path}:${row.etag || ''}`
 
 export const reconcileProjectionSources = async (sources, options = {}) => {
   const nextcloudSources = (sources || []).filter(isNextcloudTagSource)
@@ -48,12 +50,28 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
 
     const tagTargets = await discoverNextcloudTagTargets(source, options?.config)
     replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagTargets)
-    source.nextcloudDiscovery = { taggedTargetCount: tagTargets.length }
+    const fileCandidates = await discoverNextcloudTaggedFiles(source, options?.config, tagTargets)
+    const sourceRef = source.name || source.index
+    upsertMediaStateEntries(options?.config?.mediaState?.dbPath, fileCandidates.map(row => ({
+      entry_id: buildEntryId(sourceRef, row.target_path),
+      source_type: 'nextcloud_tag',
+      source_ref: sourceRef,
+      file_path: row.target_path,
+      file_fingerprint: buildFingerprint(row),
+      origin_tag: source.tag,
+      origin_mode: row.origin_mode,
+      origin_folder_path: row.origin_folder_path,
+      state: 'active'
+    })))
+    source.nextcloudDiscovery = {
+      taggedTargetCount: tagTargets.length,
+      fileCandidateCount: fileCandidates.length
+    }
     appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
       event_type: 'nextcloud_discovery',
       source_type: 'nextcloud_tag',
-      source_ref: source.name || source.index,
-      reason: `tagged_targets:${tagTargets.length}`
+      source_ref: sourceRef,
+      reason: `tagged_targets:${tagTargets.length},file_candidates:${fileCandidates.length}`
     })
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)
