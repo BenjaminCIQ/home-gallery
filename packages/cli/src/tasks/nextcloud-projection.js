@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 
 import Logger from '@home-gallery/logger'
+import { discoverNextcloudSourceCandidates } from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
 
@@ -43,6 +44,9 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
     if (!source.materializationMode) {
       source.materializationMode = options?.config?.nextcloudProjection?.materializationMode || 'auto'
     }
+
+    const discovery = await discoverNextcloudSourceCandidates(source, options?.config)
+    source.nextcloudDiscovery = { hrefCount: discovery.hrefs.length }
 
     log.debug(`Prepared nextcloud projection source '${source.name || source.index}' at ${sourceDir} (${source.materializationMode})`)
   }
