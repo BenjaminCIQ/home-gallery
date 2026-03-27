@@ -8,7 +8,7 @@ export interface Event {
 
 export interface EventAction {
   action: string;
-  value: string;
+  value?: string;
 }
 
 export type EventListener = (event: Event) => void;
