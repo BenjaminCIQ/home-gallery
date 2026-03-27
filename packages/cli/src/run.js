@@ -8,6 +8,7 @@ const log = Logger('cli.run')
 
 import { initConfig, defaultConfigFile, load } from './config/index.js'
 import { startServer, watchSources } from './tasks/index.js'
+import { initMediaStateDb } from './tasks/media-state-db.js'
 import { reconcileProjectionSources } from './tasks/nextcloud-projection.js'
 
 const galleryDir = path.dirname(process.argv[1])
@@ -33,6 +34,7 @@ const runServer = options => {
 }
 
 const runImport = async (options) => {
+  await initMediaStateDb(options?.config?.mediaState?.dbPath)
   const allSources = options.config.sources || []
   await reconcileProjectionSources(allSources, options)
   const onlineSources = allSources.filter(source => !source.offline)

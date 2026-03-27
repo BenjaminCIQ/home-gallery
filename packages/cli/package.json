@@ -24,15 +24,16 @@
     "watch:test": "tap repl w"
   },
   "dependencies": {
-    "@home-gallery/index": "file:../index",
     "@home-gallery/cast": "file:../cast",
     "@home-gallery/database": "file:../database",
     "@home-gallery/export-meta": "file:../export-meta",
     "@home-gallery/export-static": "file:../export-static",
     "@home-gallery/extractor": "file:../extractor",
-    "@home-gallery/server": "file:../server",
     "@home-gallery/fetch": "file:../fetch",
+    "@home-gallery/index": "file:../index",
     "@home-gallery/logger": "file:../logger",
+    "@home-gallery/server": "file:../server",
+    "better-sqlite3": "^12.8.0",
     "chokidar": "^3.5.3",
     "enquirer": "^2.3.6",
     "yaml": "^1.10.2",
