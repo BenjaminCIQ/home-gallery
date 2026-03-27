@@ -8,7 +8,7 @@ export const resolveConfig = (config, baseDir, env) => {
     resolveAll(source, ['dir', 'index', 'excludeIfPresent', 'excludeFromFile', 'trashPath'], config, baseDir, env)
   }
 
-  resolveAll(config, ['storage.dir', 'database.file', 'events.file', 'server.key', 'server.cert', 'nextcloudProjection.stagingRoot', 'mediaState.dbPath', 'mediaState.localTrashPath'], config, baseDir, env)
+  resolveAll(config, ['storage.dir', 'database.file', 'events.file', 'server.key', 'server.cert', 'nextcloudProjection.root', 'mediaState.dbPath', 'mediaState.localTrashPath'], config, baseDir, env)
 
   const loggers = config.logger || [];
   for (const logger of loggers) {

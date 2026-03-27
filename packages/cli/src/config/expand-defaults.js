@@ -37,8 +37,8 @@ export const expandConfigDefaults = (config, env) => {
 
       if (isNextcloudTagSource) {
         defaults.index = `{configDir}/{configPrefix}${defaultName}.idx`
-        defaults.stagingSubdir = source.stagingSubdir || defaultName
-        defaults.dir = `{nextcloudProjection.stagingRoot}/${defaults.stagingSubdir}`
+        defaults.projectionSubdir = source.projectionSubdir || defaultName
+        defaults.dir = `{nextcloudProjection.root}/${defaults.projectionSubdir}`
         defaults.materializationMode = source.materializationMode || config.nextcloudProjection?.materializationMode || 'auto'
       } else {
         defaults.index = '{configDir}/{configPrefix}{basename(dir)}.idx'
@@ -98,7 +98,7 @@ export const expandConfigDefaults = (config, env) => {
   }
 
   config.nextcloudProjection = {
-    stagingRoot: '{cacheDir}/nextcloud-staging',
+    root: '{cacheDir}/nextcloud-projection',
     materializationMode: 'auto',
     hashValidation: 'etag',
     ...config.nextcloudProjection

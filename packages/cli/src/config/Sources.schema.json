@@ -92,8 +92,8 @@
             "description": "Optional Nextcloud folder prefix filter for nextcloud_tag sources",
             "type": "string"
           },
-          "stagingSubdir": {
-            "description": "Optional projection staging subdirectory for this source",
+          "projectionSubdir": {
+            "description": "Optional projection subdirectory for this source",
             "type": "string"
           },
           "materializationMode": {

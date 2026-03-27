@@ -10,8 +10,8 @@ const sanitizeForPath = value => (value || '')
   .trim()
   .replace(/[^A-Za-z0-9._-]/g, '_')
 
-const getDefaultStagingSubdir = (source, i) => {
-  const preferred = source.stagingSubdir || source.name || path.basename(source.index || '') || `source_${i}`
+const getDefaultProjectionSubdir = (source, i) => {
+  const preferred = source.projectionSubdir || source.name || path.basename(source.index || '') || `source_${i}`
   return sanitizeForPath(preferred) || `source_${i}`
 }
 
@@ -23,22 +23,22 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
     return sources
   }
 
-  const stagingRoot = options?.config?.nextcloudProjection?.stagingRoot
-  if (!stagingRoot) {
-    throw new Error(`nextcloudProjection.stagingRoot is required for nextcloud_tag sources`)
+  const projectionRoot = options?.config?.nextcloudProjection?.root
+  if (!projectionRoot) {
+    throw new Error(`nextcloudProjection.root is required for nextcloud_tag sources`)
   }
 
-  await fs.mkdir(stagingRoot, { recursive: true })
+  await fs.mkdir(projectionRoot, { recursive: true })
   for (const [i, source] of sources.entries()) {
     if (!isNextcloudTagSource(source)) {
       continue
     }
 
-    const stagingSubdir = getDefaultStagingSubdir(source, i)
-    const sourceDir = path.resolve(stagingRoot, stagingSubdir)
+    const projectionSubdir = getDefaultProjectionSubdir(source, i)
+    const sourceDir = path.resolve(projectionRoot, projectionSubdir)
     await fs.mkdir(sourceDir, { recursive: true })
 
-    source.stagingSubdir = stagingSubdir
+    source.projectionSubdir = projectionSubdir
     source.dir = sourceDir
     if (!source.materializationMode) {
       source.materializationMode = options?.config?.nextcloudProjection?.materializationMode || 'auto'
