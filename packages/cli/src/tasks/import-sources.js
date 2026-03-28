@@ -97,16 +97,14 @@ export const createDatabase = async (sources, options) => {
   await pm.runCli(args, {env: options.configEnv, terminateTimeout: 2000, nodeArgs});
 }
 
-const catchIndexLimitExceeded = (err) => {
-  const { code } = err
+const isIndexLimitExceeded = (err) => typeof err?.code === 'number' && err.code === 1
+
+const assertIndexUpdateError = (err) => {
+  const { code } = err || {}
   if (typeof code != 'number') {
     throw new Error(`Updating file index failed: ${err}`, {cause: err})
   }
-
-  if (code == 1) {
-    return true
-  }
-  throw new Error(`Updating file index failed. Exit code is ${code}`)
+  throw new Error(`Updating file index failed. Exit code is ${code}`, {cause: err})
 }
 
 const generateId = len => {
@@ -136,16 +134,29 @@ export const importSources = async (sources, options) => {
   while (processing && !pm.isStopped) {
     const journal = withJournal ? generateJournal() : false
     const importOptions = { ...options, journal }
-    await updateIndices(sources, importOptions)
-      .then(() => processing = false)
-      .catch(catchIndexLimitExceeded)
-    await extract(sources, importOptions)
-      .then(() => createDatabase(sources, importOptions))
-      .then(() => applyJournals(sources, importOptions))
-      .catch(err => {
-        log.warn(err, `Import failed: ${err}`)
-        return removeJournals(sources, importOptions, true)
-      })
+    let indexLimitExceeded = false
+    try {
+      await updateIndices(sources, importOptions)
+      processing = false
+    } catch (err) {
+      if (isIndexLimitExceeded(err)) {
+        indexLimitExceeded = true
+        log.info(`File limit exceeded on file index update. Drop partial journals and retry with the next chunk.`)
+        await removeJournals(sources, importOptions, true)
+      } else {
+        assertIndexUpdateError(err)
+      }
+    }
+
+    if (!indexLimitExceeded) {
+      await extract(sources, importOptions)
+        .then(() => createDatabase(sources, importOptions))
+        .then(() => applyJournals(sources, importOptions))
+        .catch(err => {
+          log.warn(err, `Import failed: ${err}`)
+          return removeJournals(sources, importOptions, true)
+        })
+    }
 
     if (processing) {
       log.info(`New chunk of media is processed and becomes ready to browse. Continue with next chunk to process...`)
