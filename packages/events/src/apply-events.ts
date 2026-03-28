@@ -6,11 +6,15 @@ const applyEventAction = <T extends Taggable>(data: T, action: EventAction): boo
   let changed = false;
   switch (action.action) {
     case 'addTag': {
+      const value = action.value;
+      if (value === undefined) {
+        break;
+      }
       if (!data.tags) {
         data.tags = [];
       }
-      if (data.tags.indexOf(action.value) < 0) {
-        data.tags.push(action.value);
+      if (data.tags.indexOf(value) < 0) {
+        data.tags.push(value);
         changed = true;
       }
       break;
@@ -19,7 +23,11 @@ const applyEventAction = <T extends Taggable>(data: T, action: EventAction): boo
       if (!data.tags || !data.tags.length) {
         return false;
       }
-      const index = data.tags.indexOf(action.value);
+      const value = action.value;
+      if (value === undefined) {
+        return false;
+      }
+      const index = data.tags.indexOf(value);
       if (index >= 0) {
         data.tags.splice(index, 1);
         changed = true;
