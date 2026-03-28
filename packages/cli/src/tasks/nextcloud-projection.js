@@ -13,7 +13,8 @@ import {
 import {
   discoverNextcloudTaggedFiles,
   discoverNextcloudTagTargets,
-  NEXTCLOUD_RECONCILE_SKIP_PREFIX
+  NEXTCLOUD_RECONCILE_SKIP_PREFIX,
+  stripNamedFolderFromDiscoveryRow
 } from './nextcloud-discovery.js'
 
 const log = Logger('cli.task.nextcloudProjection')
@@ -177,7 +178,10 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
     const sourceRef = source.name || source.index
     try {
       const tagTargets = await discoverNextcloudTagTargets(source, options?.config)
-      replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagTargets)
+      const tagSnapshotRows = source.namedFolder
+        ? tagTargets.map(row => stripNamedFolderFromDiscoveryRow(row, source.namedFolder))
+        : tagTargets
+      replaceMediaStateTagSnapshot(options?.config?.mediaState?.dbPath, source.tag, tagSnapshotRows)
       const fileCandidates = await discoverNextcloudTaggedFiles(source, options?.config, tagTargets)
       const candidateEntries = fileCandidates.map(row => ({
         entry_id: buildEntryId(sourceRef, row.target_path),

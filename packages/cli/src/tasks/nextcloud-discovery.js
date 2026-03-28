@@ -8,6 +8,46 @@ const skipError = reason => new Error(`${NEXTCLOUD_RECONCILE_SKIP_PREFIX}${reaso
 
 const normalizeBaseUrl = baseUrl => (baseUrl || '').replace(/\/+$/, '')
 
+/** Nextcloud-relative paths use forward slashes; trim leading/trailing slashes for comparisons. */
+export const normalizeDavRelativePath = relPath =>
+  String(relPath || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+
+/**
+ * Strip Nextcloud "named folder" (virtual root) from DAV-relative paths so they match the local sync tree.
+ * Same idea as Python: Path(rp_str).relative_to(source["named_folder"]).
+ */
+export const stripNamedFolderPrefix = (targetPath, namedFolder) => {
+  const path = normalizeDavRelativePath(targetPath)
+  const folder = namedFolder ? normalizeDavRelativePath(namedFolder) : ''
+  if (!folder) {
+    return path
+  }
+  if (path === folder) {
+    return ''
+  }
+  const prefix = `${folder}/`
+  if (path.startsWith(prefix)) {
+    return path.slice(prefix.length)
+  }
+  return path
+}
+
+export const stripNamedFolderFromDiscoveryRow = (row, namedFolder) => {
+  const nf = namedFolder ? String(namedFolder).replace(/^\/+|\/+$/g, '') : ''
+  if (!nf) {
+    return row
+  }
+  const originRaw = row.origin_folder_path != null ? stripNamedFolderPrefix(row.origin_folder_path, nf) : null
+  return {
+    ...row,
+    target_path: stripNamedFolderPrefix(row.target_path, nf),
+    origin_folder_path: originRaw === '' || originRaw == null ? null : originRaw
+  }
+}
+
 const toBase64 = value => Buffer.from(value, 'utf8').toString('base64')
 
 const buildAuthHeader = ({ username, appPassword }) => `Basic ${toBase64(`${username}:${appPassword}`)}`
@@ -273,6 +313,9 @@ export const discoverNextcloudTaggedFiles = async (source, config, tagTargets = 
     uniqueByPath.set(row.target_path, row)
   }
   const files = [...uniqueByPath.values()]
-  log.debug(`Expanded ${targets.length} tag targets into ${files.length} file candidates for '${source.name || source.index}'`)
-  return files
+  const stripped = source?.namedFolder
+    ? files.map(row => stripNamedFolderFromDiscoveryRow(row, source.namedFolder))
+    : files
+  log.debug(`Expanded ${targets.length} tag targets into ${stripped.length} file candidates for '${source.name || source.index}'`)
+  return stripped
 }
