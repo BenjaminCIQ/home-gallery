@@ -140,7 +140,7 @@
 
 # Nextcloud projection settings (used when at least one source has type: nextcloud_tag)
 #nextcloud:
-  # Nextcloud base URL (without trailing slash)
+  # Nextcloud base URL (without trailing slash) - probably has /nextcloud/ at the end
   #baseUrl: http://nextcloud.local
   # Login username used for WebDAV
   #username: your-username
