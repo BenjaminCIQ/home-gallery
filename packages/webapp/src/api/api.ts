@@ -70,6 +70,30 @@ export const fetchAll = async (limits, onChunk) => {
 
 export const getEvents = () => fetchJsonWorker(`api/events.json`)
 
+export type SyncNotificationSeverity = 'error' | 'warning' | 'info'
+
+export type SyncNotificationItem = {
+  id: number
+  event_type: string
+  source_ref: string | null
+  source_type: string | null
+  file_path: string | null
+  created_at: string
+  severity: SyncNotificationSeverity
+  title: string
+  summary: string
+  detail: string
+  raw?: { reason?: string | null }
+}
+
+export type SyncNotificationsResponse = {
+  configured: boolean
+  items: SyncNotificationItem[]
+}
+
+export const fetchSyncNotifications = (): Promise<SyncNotificationsResponse> =>
+  fetchJsonWorker('api/media-state/sync-notifications.json')
+
 export const getTree = async (hash: string) => fetchJsonWorker(`api/database/tree/${hash}.json`)
 
 let eventSourceReconnectTimeout = 1000;

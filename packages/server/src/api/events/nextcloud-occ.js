@@ -3,6 +3,7 @@ import { spawn } from 'child_process'
 import Logger from '@home-gallery/logger'
 
 import { selectMediaRowsForGalleryEntry } from '../database/gallery-media-state-resolve.js'
+import { appendMediaStateEvent } from '../media-state-append-event.js'
 
 const log = Logger('server.api.events.nextcloudOcc')
 
@@ -64,7 +65,10 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event, getGallery
       unique.set(`${row.target_file_id}:${row.origin_tag}`, {
         fileId: row.target_file_id,
         tagName: row.origin_tag,
-        entryId: row.entry_id
+        entryId: row.entry_id,
+        source_type: row.source_type,
+        source_ref: row.source_ref,
+        file_path: row.file_path
       })
     }
   }
@@ -75,6 +79,14 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event, getGallery
       log.info(`Removed Nextcloud tag '${target.tagName}' from file ${target.fileId} for ${target.entryId}`)
     } catch (err) {
       log.warn(err, `Failed to remove Nextcloud tag '${target.tagName}' from file ${target.fileId} for ${target.entryId}`)
+      appendMediaStateEvent(dbPath, {
+        event_type: 'nextcloud_occ_tag_delete_failed',
+        entry_id: target.entryId,
+        source_type: target.source_type || 'nextcloud_tag',
+        source_ref: target.source_ref || null,
+        file_path: target.file_path || null,
+        reason: `tag:${target.tagName} fileId:${target.fileId} error:${err?.message || String(err)}`
+      })
     }
   }
 }

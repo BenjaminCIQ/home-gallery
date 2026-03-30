@@ -6,7 +6,7 @@ import { UnsavedEventHandler } from './UnsavedEventHandler';
 import { type Tag } from './models';
 import { EventBus } from './EventBus';
 
-export { fetchAll, getEvents, mapEntriesForBrowser } from './api'
+export { fetchAll, fetchSyncNotifications, getEvents, mapEntriesForBrowser } from './api'
 
 const tagToAction = (tag: Tag): EventAction => {
   if (tag.remove) {

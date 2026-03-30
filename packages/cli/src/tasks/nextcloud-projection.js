@@ -102,6 +102,13 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
 
     if (!isWithinRoot(path.resolve(localRoot), sourcePath) || !isWithinRoot(path.resolve(sourceDir), targetPath)) {
       log.warn(`Skip unsafe projection path for ${sourceRef}: ${row.file_path}`)
+      appendMediaStateEvent(dbPath, {
+        event_type: 'nextcloud_projection_unsafe_path',
+        source_type: 'nextcloud_tag',
+        source_ref: sourceRef,
+        file_path: row.file_path,
+        reason: `sourcePath:${sourcePath} targetPath:${targetPath}`
+      })
       continue
     }
     expectedTargets.add(targetPath)
@@ -109,15 +116,33 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
     const sourceStat = await fs.stat(sourcePath).catch(() => false)
     if (!sourceStat || !sourceStat.isFile()) {
       log.warn(`Skip projection of missing local file '${sourcePath}' for '${sourceRef}'`)
+      appendMediaStateEvent(dbPath, {
+        event_type: 'nextcloud_projection_missing_local_file',
+        source_type: 'nextcloud_tag',
+        source_ref: sourceRef,
+        file_path: row.file_path,
+        reason: `expectedLocalFile:${sourcePath}`
+      })
       continue
     }
 
-    await materializeFile({
-      mode,
-      sourcePath,
-      targetPath
-    })
-    materializedCount += 1
+    try {
+      await materializeFile({
+        mode,
+        sourcePath,
+        targetPath
+      })
+      materializedCount += 1
+    } catch (err) {
+      log.warn(err, `Projection materialize failed for '${sourceRef}' ${row.file_path}`)
+      appendMediaStateEvent(dbPath, {
+        event_type: 'nextcloud_projection_materialize_failed',
+        source_type: 'nextcloud_tag',
+        source_ref: sourceRef,
+        file_path: row.file_path,
+        reason: `${err?.message || String(err)} target:${targetPath}`
+      })
+    }
   }
 
   const existingProjected = await listFilesRecursive(sourceDir)

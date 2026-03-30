@@ -14,6 +14,7 @@ import { webapp } from './webapp.js';
 import { augmentReqByUserMiddleware, createBasicAuthMiddleware, defaultIpWhitelistRules } from './auth/index.js'
 import { isIndex, skipIf, browserBasePath, routerPrefix } from './utils.js'
 import { debugApi } from './api/debug/index.js'
+import { mediaStateSyncNotificationsApi } from './api/media-state-sync-notifications.js'
 import { browserPlugins } from './browser-plugins.js';
 import Logger from '@home-gallery/logger';
 import { webappMiddleware } from './webapp-middleware.js';
@@ -71,6 +72,7 @@ export async function createApp(context) {
   await treeApi(context)
   await sourcesApi(context)
   await debugApi(context)
+  await mediaStateSyncNotificationsApi(context)
 
   await webappMiddleware(context)
   await socialMetaTagsMiddleware(context)
