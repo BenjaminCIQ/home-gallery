@@ -83,11 +83,13 @@ export type SyncNotificationItem = {
   title: string
   summary: string
   detail: string
+  counts_as_unread: boolean
   raw?: { reason?: string | null }
 }
 
 export type SyncNotificationsResponse = {
   configured: boolean
+  notifyOnlyFailures?: boolean
   items: SyncNotificationItem[]
 }
 

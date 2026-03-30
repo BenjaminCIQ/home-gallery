@@ -17,6 +17,15 @@ export async function webappMiddleware(context) {
       }
   });
 
+  const nc = config.nextcloud || {}
+  const tagSyncSec = typeof nc.tagSyncIntervalSeconds === 'number' ? nc.tagSyncIntervalSeconds : 120
+  const pollOverride = typeof nc.syncNotificationsPollIntervalSeconds === 'number'
+    ? nc.syncNotificationsPollIntervalSeconds
+    : null
+  const pollSec = (pollOverride != null && pollOverride > 0)
+    ? pollOverride
+    : (tagSyncSec > 0 ? tagSyncSec : 120)
+
   const staticState = {
     ...config?.webapp,
     title: config.webapp?.title || 'Home Gallery',
@@ -25,6 +34,11 @@ export async function webappMiddleware(context) {
       plugins: pluginEntries
     },
     sources,
+    nextcloud: {
+      tagSyncIntervalSeconds: tagSyncSec,
+      syncNotificationsPollIntervalMs: pollSec * 1000,
+      syncNotifyOnlyFailures: nc.syncNotifyOnlyFailures !== false
+    }
   }
 
   const staticProperties = {

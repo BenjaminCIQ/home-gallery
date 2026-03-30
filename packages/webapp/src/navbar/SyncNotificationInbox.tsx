@@ -1,9 +1,10 @@
 import * as React from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBell } from '@fortawesome/free-solid-svg-icons'
 
 import { fetchSyncNotifications, type SyncNotificationItem } from '../api/api'
+import { useAppConfig } from '../config/useAppConfig'
 import { classNames } from '../utils/class-names'
 
 /** Max notification id the user has acknowledged; unread = items with id > this. */
@@ -59,6 +60,13 @@ const severityRowClass = (severity: SyncNotificationItem['severity']) =>
   })
 
 export const SyncNotificationInbox = () => {
+  const appConfig = useAppConfig()
+  const pollIntervalMs = useMemo(() => {
+    const ms = (appConfig as { nextcloud?: { syncNotificationsPollIntervalMs?: number } }).nextcloud
+      ?.syncNotificationsPollIntervalMs
+    return typeof ms === 'number' && ms >= 1000 ? ms : 120_000
+  }, [appConfig])
+
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [items, setItems] = useState<SyncNotificationItem[]>([])
   const [open, setOpen] = useState(false)
@@ -84,9 +92,9 @@ export const SyncNotificationInbox = () => {
   useEffect(() => {
     const t = window.setInterval(() => {
       load()
-    }, 90_000)
+    }, pollIntervalMs)
     return () => window.clearInterval(t)
-  }, [load])
+  }, [load, pollIntervalMs])
 
   useEffect(() => {
     if (!open) {
@@ -106,7 +114,7 @@ export const SyncNotificationInbox = () => {
     return null
   }
 
-  const unreadCount = items.filter(i => i.id > lastReadId).length
+  const unreadCount = items.filter(i => i.id > lastReadId && (i.counts_as_unread !== false)).length
   const hasUnread = unreadCount > 0
 
   const markAllRead = () => {
