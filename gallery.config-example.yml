@@ -144,6 +144,8 @@
   #tagSyncIntervalSeconds: 120
   # Bell unread badge only counts error/warning sync events; info rows still appear in the list.
   #syncNotifyOnlyFailures: true
+  # Max sync notification rows returned by the API (clamped server-side, default 10).
+  #syncNotificationsMaxItems: 10
   # Optional: webapp notification poll interval (seconds). If omitted, matches tagSyncIntervalSeconds.
   #syncNotificationsPollIntervalSeconds: 120
   # Nextcloud base URL (without trailing slash) - probably has /nextcloud/ at the end

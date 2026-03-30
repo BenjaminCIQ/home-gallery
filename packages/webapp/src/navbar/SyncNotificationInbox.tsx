@@ -69,6 +69,7 @@ export const SyncNotificationInbox = () => {
 
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [items, setItems] = useState<SyncNotificationItem[]>([])
+  const [responseLimit, setResponseLimit] = useState<number | null>(null)
   const [open, setOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [lastReadId, setLastReadId] = useState(readLastReadId)
@@ -79,6 +80,7 @@ export const SyncNotificationInbox = () => {
       const data = await fetchSyncNotifications()
       setConfigured(data.configured)
       setItems(data.items || [])
+      setResponseLimit(typeof data.limit === 'number' ? data.limit : null)
     } catch {
       setConfigured(false)
       setItems([])
@@ -202,6 +204,12 @@ export const SyncNotificationInbox = () => {
               </li>
             ))}
           </ul>
+
+          {responseLimit != null && items.length > 0 && items.length === responseLimit && (
+            <p className="border-t border-gray-700 px-3 py-2 text-xs text-gray-500">
+              Showing {responseLimit} most recent events.
+            </p>
+          )}
         </div>
       )}
     </div>

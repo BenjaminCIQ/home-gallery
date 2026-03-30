@@ -118,6 +118,7 @@ export const expandConfigDefaults = (config, env) => {
   config.nextcloud = {
     tagSyncIntervalSeconds: 120,
     syncNotifyOnlyFailures: true,
+    syncNotificationsMaxItems: 10,
     ...config.nextcloud
   }
 
