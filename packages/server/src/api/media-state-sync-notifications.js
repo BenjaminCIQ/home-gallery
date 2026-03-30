@@ -9,6 +9,15 @@ const log = Logger('server.api.mediaStateSyncNotifications')
 
 const PREFIX = 'nextcloud_reconcile_skip:'
 
+const SYNC_NOTIFICATIONS_ABSOLUTE_MAX = 200
+
+/** @param {object} [config] */
+const resolveSyncNotificationsLimit = config => {
+  const raw = config?.nextcloud?.syncNotificationsMaxItems
+  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 10
+  return Math.min(Math.max(1, n), SYNC_NOTIFICATIONS_ABSOLUTE_MAX)
+}
+
 /**
  * @param {string} reason
  * @returns {{ title: string, summary: string, detail: string, severity: 'error'|'warning'|'info' }}
@@ -154,13 +163,14 @@ export async function mediaStateSyncNotificationsApi(context) {
     }
 
     try {
+      const limit = resolveSyncNotificationsLimit(config)
       const rows = db.prepare(`
         SELECT id, event_type, source_ref, source_type, file_path, reason, created_at
         FROM events
         WHERE event_type GLOB 'nextcloud*'
         ORDER BY id DESC
-        LIMIT 100
-      `).all()
+        LIMIT ?
+      `).all(limit)
 
       const notifyOnlyFailures = config?.nextcloud?.syncNotifyOnlyFailures !== false
       const items = rows.map(mapRow).map(item => ({
@@ -169,7 +179,7 @@ export async function mediaStateSyncNotificationsApi(context) {
           ? item.severity === 'error' || item.severity === 'warning'
           : true
       }))
-      return res.json({ configured: true, notifyOnlyFailures, items })
+      return res.json({ configured: true, notifyOnlyFailures, limit, items })
     } catch (err) {
       log.error(err, 'Failed to read sync notifications')
       return res.status(500).json({ error: 'Failed to read notifications' })

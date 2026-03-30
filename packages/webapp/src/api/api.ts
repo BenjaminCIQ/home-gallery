@@ -90,6 +90,8 @@ export type SyncNotificationItem = {
 export type SyncNotificationsResponse = {
   configured: boolean
   notifyOnlyFailures?: boolean
+  /** Effective SQL limit for this response (may be fewer rows in DB). */
+  limit?: number
   items: SyncNotificationItem[]
 }
 
