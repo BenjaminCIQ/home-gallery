@@ -38,7 +38,7 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event, getGallery
 
   const occCommand = config?.nextcloud?.occCommand
   if (!occCommand) {
-    log.debug(`nextcloud.occCommand is not configured. Skip OCC removeFromFrame integration`)
+    log.debug({ reason: 'occCommand_missing' }, 'nextcloudOcc: skip removeFromFrame')
     return
   }
 
@@ -52,14 +52,40 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event, getGallery
   for (const entryId of event.targetIds || []) {
     const galleryEntry = getGalleryEntry?.(entryId)
     if (!galleryEntry) {
+      log.debug({ eventId: event.id, entryId, reason: 'no_gallery_entry' }, 'nextcloudOcc: skip target')
       continue
     }
     const rows = selectMediaRowsForGalleryEntry(dbPath, config, galleryEntry)
+    if (!rows.length) {
+      log.debug({ eventId: event.id, entryId }, 'nextcloudOcc: no media rows for entry')
+    }
     for (const row of rows) {
       if (row.source_type !== 'nextcloud_tag' || row.origin_mode !== 'file_tag') {
+        log.debug(
+          {
+            eventId: event.id,
+            entryId,
+            reason: 'skip_not_file_tag',
+            source_type: row.source_type,
+            origin_mode: row.origin_mode,
+            mediaRowId: row.id
+          },
+          'nextcloudOcc: row skipped'
+        )
         continue
       }
       if (!row.target_file_id || !row.origin_tag) {
+        log.debug(
+          {
+            eventId: event.id,
+            entryId,
+            reason: 'skip_missing_file_id_or_tag',
+            target_file_id: row.target_file_id,
+            origin_tag: row.origin_tag,
+            mediaRowId: row.id
+          },
+          'nextcloudOcc: row skipped'
+        )
         continue
       }
       unique.set(`${row.target_file_id}:${row.origin_tag}`, {
@@ -75,6 +101,10 @@ export const applyNextcloudOccRemoveFromFrame = async (config, event, getGallery
 
   for (const target of unique.values()) {
     try {
+      log.debug(
+        { eventId: event.id, fileId: target.fileId, tagName: target.tagName, entryId: target.entryId },
+        'nextcloudOcc: running OCC tag delete'
+      )
       await runOccDeleteTag(occCommand, target.fileId, target.tagName)
       log.info(`Removed Nextcloud tag '${target.tagName}' from file ${target.fileId} for ${target.entryId}`)
     } catch (err) {

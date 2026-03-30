@@ -2,9 +2,13 @@ import fs from "fs"
 import { PathLike } from 'fs';
 import { Event, EventAction } from './models.js';
 
+import Logger from '@home-gallery/logger'
+
 import { Taggable } from './taggable.js';
 
 import { removeEvent } from './remove-event.js'
+
+const log = Logger('events.applyEventsServer')
 
 const removeEntryFile = <T extends Taggable>(data: T, event: Event, eventsFileName: PathLike): boolean => {
   if (!data.files || !data.files.length) {
@@ -15,7 +19,12 @@ const removeEntryFile = <T extends Taggable>(data: T, event: Event, eventsFileNa
     fs.unlinkSync(filePath);
     removeEvent(eventsFileName, event)
   } catch (err) {
-    console.error("Error deleting file:", err);
+    const e = err as NodeJS.ErrnoException
+    if (e?.code === 'ENOENT') {
+      log.debug({ filePath, eventId: event.id, code: e.code }, 'removeEntryFile: unlink ENOENT (file already gone or replay)')
+    } else {
+      log.warn(err as Error, `removeEntryFile failed for ${filePath}`)
+    }
   }
   return true;
 }

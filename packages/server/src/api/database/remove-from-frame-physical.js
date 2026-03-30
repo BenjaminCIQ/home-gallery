@@ -42,11 +42,13 @@ export const applyRemoveFromFramePhysical = (config, database, event) => {
     for (const entry of entries) {
       const fp = entry.files?.[0]?.filepath
       if (!fp) {
+        log.debug({ entryId: entry.id }, 'removeFromFrame: skip, no filepath')
         continue
       }
       const abs = path.normalize(fp)
       const match = matchSourceByDirectoryPrefix(config.sources || [], abs)
       if (!match) {
+        log.debug({ entryId: entry.id, abs, branch: 'unmatched_unlink' }, 'removeFromFrame: physical')
         try {
           fs.unlinkSync(abs)
         } catch (err) {
@@ -59,9 +61,14 @@ export const applyRemoveFromFramePhysical = (config, database, event) => {
       const { source } = match
       const policy = source.onRemoveFromFrame || config.mediaState?.localRemovalPolicy || 'trash'
       const trashPath = source.trashPath || config.mediaState?.localTrashPath
+      const matchedSource = source.name ?? source.index
 
       if ((!source.type || source.type === 'local_folder') && policy === 'trash' && trashPath) {
         const destDir = path.resolve(trashPath)
+        log.debug(
+          { entryId: entry.id, abs, branch: 'trash_move', matchedSource, policy: 'trash' },
+          'removeFromFrame: physical'
+        )
         try {
           fs.mkdirSync(destDir, { recursive: true })
           const dest = uniqueDestPath(destDir, path.basename(abs))
@@ -78,6 +85,10 @@ export const applyRemoveFromFramePhysical = (config, database, event) => {
         continue
       }
 
+      log.debug(
+        { entryId: entry.id, abs, branch: 'unlink', matchedSource, policy },
+        'removeFromFrame: physical'
+      )
       try {
         fs.unlinkSync(abs)
       } catch (err) {

@@ -119,8 +119,14 @@ export async function eventsApi(context) {
     if (!event.date) {
       event.date = new Date().toISOString();
     }
+    const actionNames = (event.actions || []).map(a => a.action).filter(Boolean)
+    log.debug(
+      { eventId: event.id, type: event.type, targetIds: event.targetIds, actions: actionNames },
+      'push: received event'
+    )
     appendEvent(eventsFilename, event)
       .then(() => {
+        log.debug({ eventId: event.id, stage: 'after_append' }, 'push: stage')
         return applyMediaStateLifecycleEvent(config, event, getGalleryEntry)
           .catch(err => {
             log.warn(err, `Failed to apply media_state lifecycle side effects for event ${event.id}`)
@@ -128,6 +134,7 @@ export async function eventsApi(context) {
           .then(() => event)
       })
       .then(() => {
+        log.debug({ eventId: event.id, stage: 'after_media_state' }, 'push: stage')
         return applyNextcloudOccRemoveFromFrame(config, event, getGalleryEntry)
           .catch(err => {
             log.warn(err, `Failed to apply OCC removeFromFrame side effects for event ${event.id}`)
@@ -135,10 +142,12 @@ export async function eventsApi(context) {
           .then(() => event)
       })
       .then(() => {
+        log.debug({ eventId: event.id, stage: 'after_occ' }, 'push: stage')
         log.info(`Saved event ${event.id} to ${eventsFilename}`);
         if (events !== false) {
           events.data.push(event);
         }
+        log.debug({ eventId: event.id, stage: 'before_bridge' }, 'push: stage')
         bridgeClientEvents(event)
         res.sendStatus(201)
       })

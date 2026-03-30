@@ -57,6 +57,7 @@ const ensureLocalMediaRow = (config, galleryEntry, now) => {
 export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEntry) => {
   const actions = getRelevantActions(event)
   if (!actions.length) {
+    log.debug({ eventId: event?.id }, 'mediaState: no remove/restore actions')
     return
   }
 
@@ -116,6 +117,7 @@ export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEnt
       for (const entryId of event.targetIds || []) {
         const galleryEntry = getGalleryEntry?.(entryId)
         if (!galleryEntry) {
+          log.debug({ eventId: event.id, entryId }, 'mediaState: skip, no gallery entry')
           continue
         }
 
@@ -130,8 +132,17 @@ export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEnt
               deleted_at: null,
               last_seen_at: now
             })
+            log.debug(
+              { eventId: event.id, entryId, fingerprint: localRow.file_fingerprint },
+              'mediaState: inserted synthetic local media row'
+            )
             rows = collectMediaRowsForGalleryEntryOnDb(db, config, galleryEntry)
           }
+        }
+
+        if (!rows.length) {
+          log.debug({ eventId: event.id, entryId }, 'mediaState: no media rows for entry')
+          continue
         }
 
         for (const row of rows) {
@@ -152,13 +163,33 @@ export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEnt
                   reason: `userAction:${event.id}`,
                   created_at: now
                 })
+                log.debug(
+                  {
+                    eventId: event.id,
+                    entryId,
+                    mediaRowId: row.id,
+                    fingerprint: row.file_fingerprint,
+                    from_state: currentState,
+                    to_state: 'disabled'
+                  },
+                  'mediaState: row disabled + lifecycle event'
+                )
                 currentState = 'disabled'
+              } else {
+                log.debug(
+                  { eventId: event.id, entryId, mediaRowId: row.id, state: currentState },
+                  'mediaState: skip remove, row not active'
+                )
               }
               continue
             }
 
             if (action === ACTION_RESTORE) {
               if (row.origin_mode === 'folder_tag' && row.source_type === 'nextcloud_tag') {
+                log.debug(
+                  { eventId: event.id, entryId, mediaRowId: row.id },
+                  'mediaState: skip restore folder_tag nextcloud row'
+                )
                 continue
               }
               if (currentState === 'disabled') {
@@ -175,7 +206,23 @@ export const applyMediaStateLifecycleEvent = async (config, event, getGalleryEnt
                   reason: `userAction:${event.id}`,
                   created_at: now
                 })
+                log.debug(
+                  {
+                    eventId: event.id,
+                    entryId,
+                    mediaRowId: row.id,
+                    fingerprint: row.file_fingerprint,
+                    from_state: currentState,
+                    to_state: 'active'
+                  },
+                  'mediaState: row restored + lifecycle event'
+                )
                 currentState = 'active'
+              } else {
+                log.debug(
+                  { eventId: event.id, entryId, mediaRowId: row.id, state: currentState },
+                  'mediaState: skip restore, row not disabled'
+                )
               }
             }
           }
