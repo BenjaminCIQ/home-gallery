@@ -4,6 +4,7 @@ import chokidar from 'chokidar'
 import Logger from '@home-gallery/logger'
 
 import { CliProcessManager } from '../utils/cli-process-manager.js'
+import { reconcileProjectionSources } from './nextcloud-projection.js'
 
 const log = Logger('cli.task.import')
 
@@ -210,6 +211,28 @@ export const watchSources = async (sources, options) => {
   log.trace({chokidarOptions}, `Use chokidar as file watcher ${usePolling ? 'with polling' : 'with fs events'}`)
   let watcher = chokidar.watch(sourceDirs, chokidarOptions)
 
+  let nextcloudTagIntervalId = null
+  let isNextcloudReconciling = false
+  const fullSources = options.config?.sources || sources
+  const tagSyncSeconds = options.config?.nextcloud?.tagSyncIntervalSeconds ?? 120
+  if (fullSources.some(s => s.type === 'nextcloud_tag') && tagSyncSeconds > 0) {
+    const tickNextcloud = async () => {
+      if (isNextcloudReconciling) {
+        return
+      }
+      isNextcloudReconciling = true
+      try {
+        await reconcileProjectionSources(fullSources, options)
+      } catch (err) {
+        log.warn(err, `Periodic Nextcloud reconcile failed`)
+      } finally {
+        isNextcloudReconciling = false
+      }
+    }
+    nextcloudTagIntervalId = setInterval(tickNextcloud, tagSyncSeconds * 1000)
+    log.info(`Nextcloud tag sync every ${tagSyncSeconds}s while watch is running`)
+  }
+
   const runImport = async () => {
     if (isImporting) {
       return
@@ -319,6 +342,10 @@ export const watchSources = async (sources, options) => {
 
     const shutdown = () => {
       log.info(`Stopping file watcher`)
+      if (nextcloudTagIntervalId) {
+        clearInterval(nextcloudTagIntervalId)
+        nextcloudTagIntervalId = null
+      }
       Promise.all([watcher.close(), pm.killAll('SIGINT')])
         .then(() => {
           fileChangeCount = 0

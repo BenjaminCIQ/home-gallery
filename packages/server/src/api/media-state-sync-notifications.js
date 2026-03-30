@@ -162,8 +162,14 @@ export async function mediaStateSyncNotificationsApi(context) {
         LIMIT 100
       `).all()
 
-      const items = rows.map(mapRow)
-      return res.json({ configured: true, items })
+      const notifyOnlyFailures = config?.nextcloud?.syncNotifyOnlyFailures !== false
+      const items = rows.map(mapRow).map(item => ({
+        ...item,
+        counts_as_unread: notifyOnlyFailures
+          ? item.severity === 'error' || item.severity === 'warning'
+          : true
+      }))
+      return res.json({ configured: true, notifyOnlyFailures, items })
     } catch (err) {
       log.error(err, 'Failed to read sync notifications')
       return res.status(500).json({ error: 'Failed to read notifications' })
