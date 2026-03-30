@@ -12,6 +12,7 @@ import { EditNavBar } from './EditNavBar';
 import { NavItem } from './NavItem';
 import { ViewNavBar } from './ViewNavBar';
 import { SearchInput, SearchButton } from "./SearchInput";
+import { SyncNotificationInbox } from './SyncNotificationInbox';
 
 export const DesktopNavBar = ({disableEdit = false, showDialog}) => {
   const viewMode = useEditModeStore(state => state.viewMode);
@@ -29,7 +30,8 @@ export const DesktopNavBar = ({disableEdit = false, showDialog}) => {
                 <EditNavBar showDialog={showDialog}/>
               )}
             </div>
-            <div className="flex pr-2 space-x-4">
+            <div className="flex pr-2 space-x-4 items-center">
+              <SyncNotificationInbox />
               <SearchInput focus={false} />
             </div>
           </div>
@@ -48,35 +50,34 @@ export const MobileNavBar = ({disableEdit = false, showDialog}) => {
       <nav className="sticky top-0 z-10 bg-gray-800">
         <div className="mx-auto">
           <div className="relative flex items-center justify-between h-12">
-            { !showSearch && (
-              <>
-                <div className="flex px-2 space-x-2 overflow-x-visible">
+            <div className="flex px-2 space-x-2 overflow-x-visible min-w-0 grow">
+              { !showSearch && (
+                <>
                   { viewMode === ViewMode.VIEW && (
                     <ViewNavBar disableEdit={disableEdit}/>
                   )}
                   { viewMode === ViewMode.EDIT && (
                     <EditNavBar showDialog={showDialog}/>
                   )}
+                </>
+              )}
+              { showSearch && (
+                <NavItem icon={icons.faArrowLeft} onClick={() => setShowSearch(false)} />
+              )}
+            </div>
+            <div className="flex pr-2 space-x-2 items-center shrink-0">
+              <SyncNotificationInbox />
+              { !showSearch && (
+                <div className="overflow-hidden border-gray-500 rounded">
+                  <SearchButton onClick={() => setShowSearch(true)}/>
                 </div>
-                <div className="flex pr-2 space-x-4">
-                  <div className="overflow-hidden border-gray-500 rounded">
-                    <SearchButton onClick={() => setShowSearch(true)}/>
-                  </div>
+              )}
+              { showSearch && (
+                <div className="overflow-hidden border-gray-500 rounded w-[min(100vw-8rem,20rem)]">
+                  <SearchInput focus={true} />
                 </div>
-              </>
-            )}
-            { showSearch && (
-              <>
-                <div className="flex px-2 space-x-2 overflow-x-visible grow-0">
-                  <NavItem icon={icons.faArrowLeft} onClick={() => setShowSearch(false)} />
-                </div>
-                <div className="flex pr-2 space-x-4 grow">
-                  <div className="overflow-hidden border-gray-500 rounded grow">
-                    <SearchInput focus={true} />
-                  </div>
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </nav>
