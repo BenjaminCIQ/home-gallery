@@ -99,6 +99,7 @@ export const createDatabase = async (sources, options) => {
 }
 
 const isIndexLimitExceeded = (err) => typeof err?.code === 'number' && err.code === 1
+const isLikelyTransientIndexRace = err => typeof err?.code === 'number' && err.code === 2
 
 const assertIndexUpdateError = (err) => {
   const { code } = err || {}
@@ -130,6 +131,7 @@ export const importSources = async (sources, options) => {
   let processing = true
   const { initialImport, incrementalUpdate } = options
   const withJournal = initialImport || incrementalUpdate
+  let transientIndexFailures = 0
 
   log.info(`Import files from source dirs: ${sources.map(source => source.dir).join(', ')}`)
   while (processing && !pm.isStopped) {
@@ -142,9 +144,22 @@ export const importSources = async (sources, options) => {
     } catch (err) {
       if (isIndexLimitExceeded(err)) {
         indexLimitExceeded = true
+        transientIndexFailures = 0
         log.info(`File limit exceeded on file index update. Drop partial journals and retry with the next chunk.`)
         await removeJournals(sources, importOptions, true)
+      } else if (options.watch && isLikelyTransientIndexRace(err)) {
+        indexLimitExceeded = true
+        transientIndexFailures += 1
+        log.warn(
+          { code: err?.code, transientIndexFailures, journal: importOptions.journal },
+          `Index update failed with exit code 2 (likely transient ENOENT race). Drop partial journals and retry.`
+        )
+        await removeJournals(sources, importOptions, true)
+        if (transientIndexFailures >= 3) {
+          throw new Error(`Updating file index failed repeatedly with exit code 2 (${transientIndexFailures} times).`, { cause: err })
+        }
       } else {
+        transientIndexFailures = 0
         assertIndexUpdateError(err)
       }
     }
@@ -153,6 +168,7 @@ export const importSources = async (sources, options) => {
       await extract(sources, importOptions)
         .then(() => createDatabase(sources, importOptions))
         .then(() => applyJournals(sources, importOptions))
+        .then(() => { transientIndexFailures = 0 })
         .catch(err => {
           log.warn(err, `Import failed: ${err}`)
           return removeJournals(sources, importOptions, true)
