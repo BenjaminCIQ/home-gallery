@@ -36,6 +36,13 @@ export const removeFromFrame = async(entryID: string, hint?: RemoveFromFrameTarg
     actions: [{action: 'removeFromFrame'}]
   };
   return pushEvent(event)
+    .then((result: any) => {
+      if (result?.staleTargetRecovered) {
+        console.warn('removeFromFrame recovered stale target id; forcing page refresh')
+        window.location.reload()
+      }
+      return result
+    })
     .catch((err: any) => {
       if (err?.type === 'stale_target_id' || err?.status === 409) {
         console.warn('removeFromFrame stale target id detected; forcing page refresh')
