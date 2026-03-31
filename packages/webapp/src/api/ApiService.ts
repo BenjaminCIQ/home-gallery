@@ -27,6 +27,14 @@ export type RemoveFromFrameTargetHint = {
   hash?: string;
 }
 
+const notifyRefreshReason = (message: string) => {
+  try {
+    window.alert(message)
+  } catch {
+    // ignore UI alert failures
+  }
+}
+
 export const removeFromFrame = async(entryID: string, hint?: RemoveFromFrameTargetHint) => {
   const event: Event = {
     type: 'userAction',
@@ -39,6 +47,7 @@ export const removeFromFrame = async(entryID: string, hint?: RemoveFromFrameTarg
     .then((result: any) => {
       if (result?.staleTargetRecovered) {
         console.warn('removeFromFrame recovered stale target id; forcing page refresh')
+        notifyRefreshReason('Your gallery list changed during import. The item ID was corrected and the page will refresh now.')
         window.location.reload()
       }
       return result
@@ -46,6 +55,7 @@ export const removeFromFrame = async(entryID: string, hint?: RemoveFromFrameTarg
     .catch((err: any) => {
       if (err?.type === 'stale_target_id' || err?.status === 409) {
         console.warn('removeFromFrame stale target id detected; forcing page refresh')
+        notifyRefreshReason('Your gallery list changed during import, so this action used an outdated item ID. The page will refresh; please retry.')
         window.location.reload()
       }
       throw err
