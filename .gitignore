@@ -16,4 +16,3 @@ gallery.config.yml
 latest-e2e
 *.tsbuildinfo
 brun.sh
-packages/folder-sync/venv/
