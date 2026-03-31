@@ -141,6 +141,8 @@
 # Nextcloud projection settings (used when at least one source has type: nextcloud_tag)
 #nextcloud:
   # How often `gallery import --watch` re-runs Nextcloud tag discovery and projection (seconds). 0 = only at import start.
+  # Projection reconciliation is incremental/idempotent; unchanged targets are skipped.
+  # Very low intervals can still increase churn pressure while indexing (especially on slower disks).
   #tagSyncIntervalSeconds: 120
   # Bell unread badge only counts error/warning sync events; info rows still appear in the list.
   #syncNotifyOnlyFailures: true
