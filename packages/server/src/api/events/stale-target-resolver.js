@@ -10,15 +10,16 @@ const getHintByTargetId = event => {
   return byId
 }
 
-export const resolveStaleRemoveTargets = (event, entries) => {
+export const validateAndResolveRemoveTargets = (event, entries, targetIds) => {
   const safeEntries = entries || []
   const id2Entry = new Map(safeEntries.map(entry => [entry.id, entry]))
   const hintByTargetId = getHintByTargetId(event)
+  const idsToResolve = targetIds || event?.targetIds || []
   const resolvedTargetIds = []
   const unresolved = []
   const recovered = []
 
-  for (const targetId of event?.targetIds || []) {
+  for (const targetId of idsToResolve) {
     if (id2Entry.has(targetId)) {
       resolvedTargetIds.push(targetId)
       continue

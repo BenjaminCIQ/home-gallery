@@ -8,7 +8,7 @@ import { readEvents, appendEvent } from '@home-gallery/events';
 import { applyNextcloudOccRemoveFromFrame } from './nextcloud-occ.js'
 import { applyMediaStateLifecycleEvent } from './media-state.js'
 import { appendMediaStateEvent } from '../media-state-append-event.js'
-import { resolveStaleRemoveTargets } from './stale-target-resolver.js'
+import { validateAndResolveRemoveTargets } from './stale-target-resolver.js'
 
 import { sendError } from '../error/index.js';
 
@@ -131,7 +131,8 @@ export async function eventsApi(context) {
       'push: received event'
     )
     if (event.type === 'userAction' && hasRemoveFromFrame(event)) {
-      const { resolvedTargetIds, unresolved, recovered } = resolveStaleRemoveTargets(event, getDatabaseEntries())
+      const currentEntries = getDatabaseEntries()
+      const { resolvedTargetIds, unresolved, recovered } = validateAndResolveRemoveTargets(event, currentEntries)
       if (unresolved.length > 0) {
         log.warn(
           { eventId: event.id, targetIds: event.targetIds, unresolved },
