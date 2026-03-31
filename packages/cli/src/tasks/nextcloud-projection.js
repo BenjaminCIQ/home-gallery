@@ -43,7 +43,7 @@ const listFilesRecursive = async rootDir => {
       const abs = path.join(currentDir, entry.name)
       if (entry.isDirectory()) {
         await walk(abs)
-      } else if (entry.isFile()) {
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
         out.push(abs)
       }
     }
@@ -68,20 +68,71 @@ const removeEmptyDirsRecursive = async rootDir => {
   await walk(rootDir)
 }
 
-const materializeFile = async ({ mode, sourcePath, targetPath }) => {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true })
-  await fs.unlink(targetPath).catch(() => false)
+const fileSignature = stat => `${stat.size}:${Math.floor(stat.mtimeMs)}`
+
+const resolveSymlinkTarget = async targetPath => {
+  const linkPath = await fs.readlink(targetPath)
+  if (path.isAbsolute(linkPath)) {
+    return path.normalize(linkPath)
+  }
+  return path.normalize(path.resolve(path.dirname(targetPath), linkPath))
+}
+
+const isTargetUpToDate = async ({ mode, sourcePath, sourceStat, targetPath }) => {
+  const targetLstat = await fs.lstat(targetPath).catch(() => null)
+  if (!targetLstat) {
+    return false
+  }
   if (mode === 'copy') {
-    await fs.copyFile(sourcePath, targetPath)
-    return
+    if (!targetLstat.isFile()) {
+      return false
+    }
+    const targetStat = await fs.stat(targetPath).catch(() => null)
+    return !!targetStat && fileSignature(targetStat) === fileSignature(sourceStat)
+  }
+
+  if (targetLstat.isSymbolicLink()) {
+    const targetRef = await resolveSymlinkTarget(targetPath).catch(() => null)
+    return targetRef === path.normalize(sourcePath)
+  }
+  if (mode === 'link') {
+    return false
+  }
+  if (!targetLstat.isFile()) {
+    return false
+  }
+  const targetStat = await fs.stat(targetPath).catch(() => null)
+  return !!targetStat && fileSignature(targetStat) === fileSignature(sourceStat)
+}
+
+const replaceFileAtomic = async (tempPath, targetPath) => {
+  await fs.rename(tempPath, targetPath)
+}
+
+const materializeFile = async ({ mode, sourcePath, sourceStat, targetPath }) => {
+  await fs.mkdir(path.dirname(targetPath), { recursive: true })
+  const targetExists = !!(await fs.lstat(targetPath).catch(() => null))
+  if (await isTargetUpToDate({ mode, sourcePath, sourceStat, targetPath })) {
+    return { status: 'unchanged' }
+  }
+  const tempPath = `${targetPath}.tmp-hg-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  if (mode === 'copy') {
+    await fs.copyFile(sourcePath, tempPath)
+    await replaceFileAtomic(tempPath, targetPath)
+    return { status: targetExists ? 'updated' : 'created' }
   }
   try {
-    await fs.symlink(sourcePath, targetPath, 'file')
+    await fs.symlink(sourcePath, tempPath, 'file')
+    await replaceFileAtomic(tempPath, targetPath)
+    return { status: targetExists ? 'updated' : 'created' }
   } catch (err) {
+    await fs.unlink(tempPath).catch(() => false)
     if (mode === 'link') {
       throw err
     }
-    await fs.copyFile(sourcePath, targetPath)
+    await fs.copyFile(sourcePath, tempPath)
+    await replaceFileAtomic(tempPath, targetPath)
+    return { status: targetExists ? 'updated' : 'created' }
   }
 }
 
@@ -94,6 +145,9 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
   const activeRows = listActiveNextcloudMediaEntries(dbPath, sourceRef, source.tag)
   const expectedTargets = new Set()
   let materializedCount = 0
+  let createdCount = 0
+  let updatedCount = 0
+  let unchangedCount = 0
 
   for (const row of activeRows) {
     const relPath = normalizeRelativePath(row.file_path)
@@ -127,12 +181,22 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
     }
 
     try {
-      await materializeFile({
+      const result = await materializeFile({
         mode,
         sourcePath,
+        sourceStat,
         targetPath
       })
-      materializedCount += 1
+      if (result.status === 'unchanged') {
+        unchangedCount += 1
+      } else {
+        materializedCount += 1
+        if (result.status === 'created') {
+          createdCount += 1
+        } else {
+          updatedCount += 1
+        }
+      }
     } catch (err) {
       log.warn(err, `Projection materialize failed for '${sourceRef}' ${row.file_path}`)
       appendMediaStateEvent(dbPath, {
@@ -159,12 +223,15 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
     event_type: 'nextcloud_projection_materialize',
     source_type: 'nextcloud_tag',
     source_ref: sourceRef,
-    reason: `materialized:${materializedCount},removed:${removedCount},active:${activeRows.length}`
+    reason: `materialized:${materializedCount},created:${createdCount},updated:${updatedCount},unchanged:${unchangedCount},removed:${removedCount},active:${activeRows.length}`
   })
 
   return {
     activeCount: activeRows.length,
     materializedCount,
+    createdCount,
+    updatedCount,
+    unchangedCount,
     removedCount
   }
 }
