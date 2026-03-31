@@ -22,9 +22,27 @@ export const addTags = async (entryIds: string[], tags: Tag[]) => {
   return pushEvent(event);
 }
 
-export const removeFromFrame = async(entryID: string) => {
-  const event: Event = {type: 'userAction', id: uuidv4(), targetIds: [entryID], actions: [{action: 'removeFromFrame'}]};
-  return pushEvent(event);
+export type RemoveFromFrameTargetHint = {
+  filepath?: string;
+  hash?: string;
+}
+
+export const removeFromFrame = async(entryID: string, hint?: RemoveFromFrameTargetHint) => {
+  const event: Event = {
+    type: 'userAction',
+    id: uuidv4(),
+    targetIds: [entryID],
+    targetHints: hint ? [{ id: entryID, filepath: hint.filepath, hash: hint.hash }] : undefined,
+    actions: [{action: 'removeFromFrame'}]
+  };
+  return pushEvent(event)
+    .catch((err: any) => {
+      if (err?.type === 'stale_target_id' || err?.status === 409) {
+        console.warn('removeFromFrame stale target id detected; forcing page refresh')
+        window.location.reload()
+      }
+      throw err
+    });
 }
 
 let eventStreamSubscribed = false;

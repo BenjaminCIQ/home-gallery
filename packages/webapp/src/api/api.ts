@@ -150,5 +150,17 @@ export const pushEvent = async (event: Event) => {
     },
     body: JSON.stringify(event)
   });
-  return response.text();
+  const contentType = response.headers.get('content-type') || ''
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => null)
+    : await response.text().catch(() => '')
+  if (!response.ok) {
+    const error = payload?.error || {}
+    const err: any = new Error(error.message || `push event failed with status ${response.status}`)
+    err.status = response.status
+    err.type = error.type
+    err.payload = payload
+    throw err
+  }
+  return payload;
 }

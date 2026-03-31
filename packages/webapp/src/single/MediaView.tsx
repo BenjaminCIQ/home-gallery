@@ -441,7 +441,10 @@ export const MediaView = () => {
       navigate(`/map?lat=${current.latitude.toFixed(5)}&lng=${current.longitude.toFixed(5)}&zoom=14`, {state: {listLocation}})
     } else if (type == 'deleteEntry') {
       const { id } = action;
-      removeFromFrame(id);
+      removeFromFrame(id, {
+        filepath: current?.files?.[0]?.filepath,
+        hash: current?.hash
+      });
     }
   }
 
