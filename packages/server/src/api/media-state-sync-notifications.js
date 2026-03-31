@@ -133,6 +133,22 @@ const mapRow = row => {
         summary: sourceRef || 'Materialize',
         detail: reason || ''
       }
+    case 'remove_from_frame_stale_target':
+      return {
+        ...base,
+        severity: 'warning',
+        title: 'Remove from frame needs refresh',
+        summary: 'Selection used outdated item IDs',
+        detail: reason || ''
+      }
+    case 'remove_from_frame_stale_target_resolved':
+      return {
+        ...base,
+        severity: 'warning',
+        title: 'Remove from frame auto-corrected',
+        summary: 'Outdated IDs were resolved to current entries',
+        detail: reason || ''
+      }
     default:
       return {
         ...base,
@@ -168,6 +184,7 @@ export async function mediaStateSyncNotificationsApi(context) {
         SELECT id, event_type, source_ref, source_type, file_path, reason, created_at
         FROM events
         WHERE event_type GLOB 'nextcloud*'
+           OR event_type GLOB 'remove_from_frame_stale_target*'
         ORDER BY id DESC
         LIMIT ?
       `).all(limit)
