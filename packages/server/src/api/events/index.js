@@ -8,6 +8,7 @@ import { readEvents, appendEvent } from '@home-gallery/events';
 import { applyNextcloudOccRemoveFromFrame } from './nextcloud-occ.js'
 import { applyMediaStateLifecycleEvent } from './media-state.js'
 import { appendMediaStateEvent } from '../media-state-append-event.js'
+import { resolveStaleRemoveTargets } from './stale-target-resolver.js'
 
 import { sendError } from '../error/index.js';
 
@@ -21,68 +22,7 @@ export async function eventsApi(context) {
   const mediaStateDbPath = config?.mediaState?.dbPath
 
   const hasRemoveFromFrame = event => (event?.actions || []).some(action => action?.action === 'removeFromFrame')
-  const normalizePath = value => String(value || '').replace(/\\/g, '/')
   const getDatabaseEntries = () => context.database?.read?.()?.data || []
-  const getHintByTargetId = event => {
-    const byId = new Map()
-    for (const hint of event?.targetHints || []) {
-      if (hint?.id) {
-        byId.set(hint.id, hint)
-      }
-    }
-    return byId
-  }
-
-  const resolveStaleRemoveTargets = event => {
-    const entries = getDatabaseEntries()
-    const id2Entry = new Map(entries.map(entry => [entry.id, entry]))
-    const hintByTargetId = getHintByTargetId(event)
-    const resolvedTargetIds = []
-    const unresolved = []
-    const recovered = []
-
-    for (const targetId of event?.targetIds || []) {
-      if (id2Entry.has(targetId)) {
-        resolvedTargetIds.push(targetId)
-        continue
-      }
-
-      const hint = hintByTargetId.get(targetId)
-      if (!hint) {
-        unresolved.push({ targetId, reason: 'missing_hint' })
-        continue
-      }
-
-      const filepath = normalizePath(hint.filepath)
-      const hash = String(hint.hash || '')
-      const candidates = entries.filter(entry => {
-        if (hash && entry?.hash === hash) {
-          return true
-        }
-        if (filepath) {
-          return (entry?.files || []).some(file => normalizePath(file?.filepath) === filepath)
-        }
-        return false
-      })
-
-      if (candidates.length === 1) {
-        const [candidate] = candidates
-        resolvedTargetIds.push(candidate.id)
-        recovered.push({
-          oldId: targetId,
-          newId: candidate.id,
-          filepath: filepath || null,
-          hash: hash || null
-        })
-      } else if (candidates.length > 1) {
-        unresolved.push({ targetId, reason: 'ambiguous_hint', candidates: candidates.length })
-      } else {
-        unresolved.push({ targetId, reason: 'no_match_for_hint' })
-      }
-    }
-
-    return { resolvedTargetIds, unresolved, recovered }
-  }
 
   const getGalleryEntry = entryId => {
     const db = context.database?.read?.()
@@ -191,7 +131,7 @@ export async function eventsApi(context) {
       'push: received event'
     )
     if (event.type === 'userAction' && hasRemoveFromFrame(event)) {
-      const { resolvedTargetIds, unresolved, recovered } = resolveStaleRemoveTargets(event)
+      const { resolvedTargetIds, unresolved, recovered } = resolveStaleRemoveTargets(event, getDatabaseEntries())
       if (unresolved.length > 0) {
         log.warn(
           { eventId: event.id, targetIds: event.targetIds, unresolved },
