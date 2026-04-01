@@ -29,9 +29,17 @@ const updateIndex = async (source, options) => {
 }
 
 const updateIndices = async (sources, options) => {
+  const updatedSources = []
   for (const source of sources) {
-    await updateIndex(source, options);
+    try {
+      await updateIndex(source, options);
+      updatedSources.push(source)
+    } catch (err) {
+      err.updatedSources = [...updatedSources, source]
+      throw err
+    }
   }
+  return updatedSources
 }
 
 const applyJournal = async (source, options) => {
@@ -137,16 +145,19 @@ export const importSources = async (sources, options) => {
   while (processing && !pm.isStopped) {
     const journal = withJournal ? generateJournal() : false
     const importOptions = { ...options, journal }
+    let currentSources = sources
     let indexLimitExceeded = false
     try {
-      await updateIndices(sources, importOptions)
+      currentSources = await updateIndices(sources, importOptions)
       processing = false
     } catch (err) {
+      if (Array.isArray(err?.updatedSources) && err.updatedSources.length) {
+        currentSources = err.updatedSources
+      }
       if (isIndexLimitExceeded(err)) {
-        indexLimitExceeded = true
+        indexLimitExceeded = false
         transientIndexFailures = 0
-        log.info(`File limit exceeded on file index update. Drop partial journals and retry with the next chunk.`)
-        await removeJournals(sources, importOptions, true)
+        log.info(`File limit exceeded on file index update. Apply current chunk and continue with the next chunk.`)
       } else if (options.watch && isLikelyTransientIndexRace(err)) {
         indexLimitExceeded = true
         transientIndexFailures += 1
@@ -165,13 +176,13 @@ export const importSources = async (sources, options) => {
     }
 
     if (!indexLimitExceeded) {
-      await extract(sources, importOptions)
-        .then(() => createDatabase(sources, importOptions))
-        .then(() => applyJournals(sources, importOptions))
+      await extract(currentSources, importOptions)
+        .then(() => createDatabase(currentSources, importOptions))
+        .then(() => applyJournals(currentSources, importOptions))
         .then(() => { transientIndexFailures = 0 })
         .catch(err => {
           log.warn(err, `Import failed: ${err}`)
-          return removeJournals(sources, importOptions, true)
+          return removeJournals(currentSources, importOptions, true)
         })
     }
 
