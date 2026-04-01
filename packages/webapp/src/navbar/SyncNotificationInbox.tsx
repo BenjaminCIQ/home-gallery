@@ -178,7 +178,7 @@ export const SyncNotificationInbox = () => {
           </div>
 
           {items.length === 0 && (
-            <p className="px-3 py-4 text-sm text-gray-500">No Nextcloud sync events yet.</p>
+            <p className="px-3 py-4 text-sm text-gray-500">No Nextcloud sync warnings or errors.</p>
           )}
 
           <ul className="flex flex-col gap-2 p-2">
@@ -207,7 +207,7 @@ export const SyncNotificationInbox = () => {
 
           {responseLimit != null && items.length > 0 && items.length === responseLimit && (
             <p className="border-t border-gray-700 px-3 py-2 text-xs text-gray-500">
-              Showing {responseLimit} most recent events.
+              Showing {responseLimit} most recent warnings/errors.
             </p>
           )}
         </div>

@@ -37,7 +37,7 @@ export async function webappMiddleware(context) {
     nextcloud: {
       tagSyncIntervalSeconds: tagSyncSec,
       syncNotificationsPollIntervalMs: pollSec * 1000,
-      syncNotifyOnlyFailures: nc.syncNotifyOnlyFailures !== false
+      syncNotifyOnlyFailures: true
     }
   }
 
