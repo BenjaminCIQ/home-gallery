@@ -17,7 +17,7 @@ const removeEntryFile = <T extends Taggable>(data: T, event: Event, eventsFileNa
   const filePath = data.files[0].filepath
   try {
     fs.unlinkSync(filePath);
-    removeEvent(eventsFileName, event)
+    removeEvent(eventsFileName, event).catch(err => log.warn(err as Error, `removeEvent failed for ${event.id}`))
   } catch (err) {
     const e = err as NodeJS.ErrnoException
     if (e?.code === 'ENOENT') {

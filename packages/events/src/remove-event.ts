@@ -4,12 +4,12 @@ import path from 'path';
 
 import { Event } from './models.js';
 import { readEvents } from './read-events.js'
-import { writeEvents } from './append-event.js'
+import { writeEvents, withEventsLock } from './append-event.js'
 import Logger from '@home-gallery/logger';
 
 const log = Logger('events.remove');
 
-export const removeEvent = async (eventsFilename: PathLike, eventToRemove: Event) => {
+export const removeEvent = (eventsFilename: PathLike, eventToRemove: Event) => withEventsLock(async () => {
 
   const exists = await fs.access(eventsFilename).then(() => true).catch(() => false)
   if (!exists) {
@@ -36,4 +36,4 @@ export const removeEvent = async (eventsFilename: PathLike, eventToRemove: Event
   log.info(`Removed event ${targetId} from ${eventsFilename}`);
 
   return removedEvents[0]; // return the actual removed event
-};
+})

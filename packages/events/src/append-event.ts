@@ -8,6 +8,14 @@ import { createHeader } from './header.js';
 import Logger from '@home-gallery/logger'
 const log = Logger('events.append')
 
+// Serializes read-modify-write and append on the events file within this process
+let lock: Promise<unknown> = Promise.resolve()
+export const withEventsLock = <T>(fn: () => Promise<T>): Promise<T> => {
+  const result = lock.then(fn)
+  lock = result.catch(() => {})
+  return result
+}
+
 const stringifyNdJson = (value: any) => JSON.stringify(value) + '\n'
 
 export const writeEvents = async (eventsFilename: PathLike, events: Event[]) => {
@@ -22,7 +30,7 @@ export const writeEvents = async (eventsFilename: PathLike, events: Event[]) => 
   log.debug(t0, `Wrote ${events.length} events to ${eventsFilename}`)
 }
 
-export const appendEvents = async (eventsFilename: PathLike, events: Event[]) => {
+export const appendEvents = (eventsFilename: PathLike, events: Event[]) => withEventsLock(async () => {
   const t0 = Date.now()
   const stat = await fs.stat(eventsFilename).catch(err => err.code == 'ENOENT' ? false : Promise.reject(err))
   if (!stat || stat?.size === 0) {
@@ -32,6 +40,6 @@ export const appendEvents = async (eventsFilename: PathLike, events: Event[]) =>
 
   await fs.appendFile(eventsFilename, events.map(stringifyNdJson).join(''))
   log.debug(t0, `Append ${events.length} events to ${eventsFilename}`)
-}
+})
 
 export const appendEvent = (eventsFilename: PathLike, event: Event) => appendEvents(eventsFilename, [event])
