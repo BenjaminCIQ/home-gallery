@@ -12,20 +12,35 @@ const hasRemoveFromFrame = event => {
   return actions.some(action => action?.action === 'removeFromFrame')
 }
 
+const OCC_TIMEOUT_MS = 60000
+
 const runOccDeleteTag = (occCommand, fileId, tagName) => {
-  const escapedTag = String(tagName).replace(/"/g, '\\"')
-  const command = `${occCommand} tag:files:delete ${fileId} "${escapedTag}" public`
+  if (!/^\d+$/.test(String(fileId))) {
+    return Promise.reject(new Error(`invalid file id '${fileId}'`))
+  }
+  // shortcut: occCommand split on whitespace, no quoted args; upgrade to array config if paths contain spaces
+  const [bin, ...base] = String(occCommand).trim().split(/\s+/)
+  const args = [...base, 'tag:files:delete', String(fileId), String(tagName), 'public']
   return new Promise((resolve, reject) => {
-    const child = spawn(command, {
-      shell: true,
-      stdio: 'inherit'
-    })
-    child.on('error', reject)
+    let output = ''
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error(`OCC tag delete timed out after ${OCC_TIMEOUT_MS}ms: ${output.trim()}`))
+    }, OCC_TIMEOUT_MS)
+    const collect = chunk => { output += chunk }
+    child.stdout.on('data', collect)
+    child.stderr.on('data', collect)
+    child.on('error', err => { clearTimeout(timer); reject(err) })
     child.on('close', code => {
-      if (code === 0) {
-        resolve()
+      clearTimeout(timer)
+      if (code !== 0) {
+        reject(new Error(`OCC tag delete failed with exit code ${code}: ${output.trim()}`))
+      } else if (/does not exist/i.test(output)) {
+        // NC returns 0 when the tag is not found at this access level
+        reject(new Error(`OCC tag delete reported: ${output.trim()}`))
       } else {
-        reject(new Error(`OCC tag delete command failed with exit code ${code}`))
+        resolve()
       }
     })
   })
