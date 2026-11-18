@@ -13,6 +13,7 @@ const log = Logger('server')
 import { EventBus } from './eventbus.js';
 import { createApp } from './app.js'
 import { spawnCli } from './utils/spawn-cli.js'
+import { appendMediaStateEvent } from './api/media-state-append-event.js'
 
 export { getPluginFiles } from './plugins.js'
 
@@ -39,6 +40,36 @@ const serverUrl = (config) => {
 const getConfigEnv = options => {
   const { configFile, autoConfigFile } = options
   return !autoConfigFile && configFile ? {GALLERY_CONFIG: configFile} : {}
+}
+
+const MAX_RESPAWN_DELAY_MS = 5 * 60 * 1000
+
+/** Spawn the import child and respawn it with growing delay when it exits unexpectedly */
+const startImporter = (args, options, context, failures = 0) => {
+  const { processManager, config } = context
+  const startedAt = Date.now()
+  const child = spawnCli(args, getConfigEnv(options))
+  processManager.addProcess(child, 1 * 1000)
+  child.once('exit', (code, signal) => {
+    // a one-shot import (no --watch) ends with code 0 on purpose
+    if (processManager.isStopped || (code === 0 && !args.includes('--watch'))) {
+      return
+    }
+    // a child that ran for a while was healthy: restart the backoff
+    const nextFailures = Date.now() - startedAt > MAX_RESPAWN_DELAY_MS ? 1 : failures + 1
+    const delay = Math.min(5000 * 2 ** (nextFailures - 1), MAX_RESPAWN_DELAY_MS)
+    log.warn(`Import process exited (code ${code}, signal ${signal}). Restart in ${delay / 1000}s`)
+    appendMediaStateEvent(config?.mediaState?.dbPath, {
+      event_type: 'import_failed',
+      reason: `Import process exited with code ${code}, signal ${signal}. Restart in ${delay / 1000}s`
+    })
+    const timer = setTimeout(() => {
+      if (!processManager.isStopped) {
+        startImporter(args, options, context, nextFailures)
+      }
+    }, delay)
+    timer.unref()
+  })
 }
 
 const shutdown = (server, processManager) => {
@@ -104,8 +135,7 @@ export async function startServer(options) {
         if (watchSources) {
           args.push('--watch')
         }
-        const watcher = spawnCli(args, getConfigEnv(options))
-        context.processManager.addProcess(watcher, 1 * 1000)
+        startImporter(args, options, context)
       }
       if (openBrowser) {
         log.debug(`Open browser with url ${url}`)

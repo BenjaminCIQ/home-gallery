@@ -20,6 +20,7 @@ const FAILURE_EVENT_TYPES = [
   'nextcloud_projection_materialize_failed',
   'remove_from_frame_stale_target',
   'remove_from_frame_stale_target_resolved',
+  'import_failed'
 ]
 
 /** @param {object} [config] */
@@ -113,6 +114,14 @@ const mapRow = row => {
         title: 'Could not remove Nextcloud tag',
         summary: sourceRef ? `${sourceRef}: ${filePath || 'file'}` : (filePath || 'OCC tag delete failed'),
         detail: reason || 'OCC command failed'
+      }
+    case 'import_failed':
+      return {
+        ...base,
+        severity: 'error',
+        title: 'Photo import stopped — restarting',
+        summary: sourceRef || 'Import process',
+        detail: reason || ''
       }
     case 'nextcloud_projection_unsafe_path':
       return {

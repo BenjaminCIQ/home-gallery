@@ -5,10 +5,13 @@ import Logger from '@home-gallery/logger'
 
 import { CliProcessManager } from '../utils/cli-process-manager.js'
 import { reconcileProjectionSources } from './nextcloud-projection.js'
+import { appendMediaStateEvent } from './media-state-db.js'
 
 const log = Logger('cli.task.import')
 
 const pm = new CliProcessManager()
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const updateIndex = async (source, options) => {
   const { journal, smallFiles, addLimits, maxFilesize } = options
@@ -172,6 +175,7 @@ export const importSources = async (sources, options) => {
         if (transientIndexFailures >= 3) {
           throw new Error(`Updating file index failed repeatedly with exit code 2 (${transientIndexFailures} times).`, { cause: err })
         }
+        await sleep(Math.min(5000 * 2 ** (transientIndexFailures - 1), 60000))
       } else {
         transientIndexFailures = 0
         assertIndexUpdateError(err)
@@ -328,12 +332,20 @@ export const watchSources = async (sources, options) => {
     }
   }
 
+  let retryTimerId = null
   return new Promise((resolve, reject) => {
     const importErrorHandler = err => {
       isImporting = false
-      log.error(err, `Failed to import: ${err}`);
-      log.info(`Stop watching files due error`)
-      return watcher.close().then(() => reject(err))
+      log.error(err, `Failed to import: ${err}`)
+      appendMediaStateEvent(options.config?.mediaState?.dbPath, {
+        event_type: 'import_failed',
+        reason: `${err?.message || err}`
+      })
+      if (pm.isStopped) {
+        return
+      }
+      log.info(`Keep watching files and retry import in 60s`)
+      retryTimerId = setTimeout(() => runImport().catch(importErrorHandler), 60 * 1000)
     }
 
     const onReady = () => {
@@ -383,6 +395,7 @@ export const watchSources = async (sources, options) => {
 
     const shutdown = () => {
       log.info(`Stopping file watcher`)
+      clearTimeout(retryTimerId)
       if (nextcloudTagIntervalId) {
         clearInterval(nextcloudTagIntervalId)
         nextcloudTagIntervalId = null
