@@ -35,6 +35,13 @@ function readFileStats(dir: string, files: string[], cb: (err: Error | null, fil
     fs.stat(filename, (err, stat) => {
       if (hasError) {
         return;
+      } else if (err?.code === 'ENOENT') {
+        // dangling symlink or file vanished
+        log.warn(`Skip file ${filename}: ${err.code}`)
+        if (!--countDownLatch) {
+          cb(null, fileStats)
+        }
+        return
       } else if (err) {
         hasError = true;
         log.warn(`Could not read file stat of ${filename}: ${err}`);
