@@ -148,6 +148,7 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
   let createdCount = 0
   let updatedCount = 0
   let unchangedCount = 0
+  const missingPaths = []
 
   for (const row of activeRows) {
     const relPath = normalizeRelativePath(row.file_path)
@@ -165,20 +166,14 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
       })
       continue
     }
-    expectedTargets.add(targetPath)
 
     const sourceStat = await fs.stat(sourcePath).catch(() => false)
     if (!sourceStat || !sourceStat.isFile()) {
-      log.warn(`Skip projection of missing local file '${sourcePath}' for '${sourceRef}'`)
-      appendMediaStateEvent(dbPath, {
-        event_type: 'nextcloud_projection_missing_local_file',
-        source_type: 'nextcloud_tag',
-        source_ref: sourceRef,
-        file_path: row.file_path,
-        reason: `expectedLocalFile:${sourcePath}`
-      })
+      // not in expectedTargets: a dangling link is removed below
+      missingPaths.push(sourcePath)
       continue
     }
+    expectedTargets.add(targetPath)
 
     try {
       const result = await materializeFile({
@@ -209,6 +204,16 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
     }
   }
 
+  if (missingPaths.length) {
+    log.warn(`Skip projection of ${missingPaths.length} missing local files for '${sourceRef}'`)
+    appendMediaStateEvent(dbPath, {
+      event_type: 'nextcloud_projection_missing_local_file',
+      source_type: 'nextcloud_tag',
+      source_ref: sourceRef,
+      reason: `missing:${missingPaths.length} first:${missingPaths.slice(0, 5).join(', ')}`
+    })
+  }
+
   const existingProjected = await listFilesRecursive(sourceDir)
   let removedCount = 0
   for (const file of existingProjected) {
@@ -219,7 +224,7 @@ const applyProjectionMaterialization = async ({ source, sourceDir, sourceRef, mo
   }
   await removeEmptyDirsRecursive(sourceDir)
 
-  appendMediaStateEvent(dbPath, {
+  if (materializedCount || removedCount) appendMediaStateEvent(dbPath, {
     event_type: 'nextcloud_projection_materialize',
     source_type: 'nextcloud_tag',
     source_ref: sourceRef,
@@ -316,7 +321,7 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
         materializedCount: projection.materializedCount,
         removedProjectedCount: projection.removedCount
       }
-      appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
+      if (disabledRows.length || reenabledRows.length || projection.materializedCount || projection.removedCount) appendMediaStateEvent(options?.config?.mediaState?.dbPath, {
         event_type: 'nextcloud_discovery',
         source_type: 'nextcloud_tag',
         source_ref: sourceRef,

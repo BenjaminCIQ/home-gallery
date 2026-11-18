@@ -76,6 +76,9 @@ const initSchema = db => {
 
     CREATE INDEX IF NOT EXISTS events_created_at_idx
       ON events(created_at);
+
+    CREATE INDEX IF NOT EXISTS events_type_reason_idx
+      ON events(event_type, reason);
   `)
 
   const columns = db.prepare(`PRAGMA table_info(media)`).all()
@@ -296,19 +299,54 @@ export const listActiveTagsBySource = (dbPath, sourceTagName) => {
   })
 }
 
+const ROUTINE_EVENT_TYPES = ['nextcloud_discovery', 'nextcloud_projection_materialize']
+const ROUTINE_EVENT_RETENTION_DAYS = 30
+const EVENT_RETENTION_DAYS = 180
+const PRUNE_BATCH_SIZE = 50000
+
+// Deletes at most PRUNE_BATCH_SIZE rows per class per call so one tick never blocks long on a huge backlog
+export const pruneMediaStateEvents = (dbPath, nowMs = Date.now()) => {
+  return withDb(dbPath, db => pruneEvents(db, nowMs))
+}
+
+const pruneEvents = (db, nowMs) => {
+  const cutoff = days => new Date(nowMs - days * 24 * 3600 * 1000).toISOString()
+  const placeholders = ROUTINE_EVENT_TYPES.map(() => '?').join(', ')
+  const routine = db.prepare(`
+    DELETE FROM events WHERE id IN (
+      SELECT id FROM events WHERE created_at < ? AND event_type IN (${placeholders}) LIMIT ${PRUNE_BATCH_SIZE}
+    )
+  `).run(cutoff(ROUTINE_EVENT_RETENTION_DAYS), ...ROUTINE_EVENT_TYPES)
+  const other = db.prepare(`
+    DELETE FROM events WHERE id IN (
+      SELECT id FROM events WHERE created_at < ? LIMIT ${PRUNE_BATCH_SIZE}
+    )
+  `).run(cutoff(EVENT_RETENTION_DAYS))
+  return routine.changes + other.changes
+}
+
 export const replaceMediaStateTagSnapshot = (dbPath, sourceTagName, records) => {
   const now = getNow()
   return withDb(dbPath, db => {
-    const updateDeleted = db.prepare(`
-      UPDATE tags
-      SET status = 'deleted',
-          status_changed_at = @status_changed_at,
-          observed_at = @observed_at
+    pruneEvents(db, Date.now())
+
+    const listActive = db.prepare(`
+      SELECT id, target_type, target_path
+      FROM tags
       WHERE source_type = 'nextcloud_tag'
         AND tag_name = @tag_name
         AND status = 'active'
     `)
 
+    const markDeleted = db.prepare(`
+      UPDATE tags
+      SET status = 'deleted',
+          status_changed_at = @status_changed_at,
+          observed_at = @observed_at
+      WHERE id = @id
+    `)
+
+    // status_changed_at only moves on a new row or a deleted->active transition
     const upsert = db.prepare(`
       INSERT INTO tags (
         source_type, tag_name, target_type, target_path, target_file_id, status, status_changed_at, observed_at
@@ -317,13 +355,19 @@ export const replaceMediaStateTagSnapshot = (dbPath, sourceTagName, records) => 
       )
       ON CONFLICT(source_type, tag_name, target_type, target_path) DO UPDATE SET
         target_file_id=excluded.target_file_id,
+        status_changed_at=CASE WHEN tags.status = 'deleted' THEN excluded.status_changed_at ELSE tags.status_changed_at END,
         status='active',
-        status_changed_at=excluded.status_changed_at,
         observed_at=excluded.observed_at
     `)
 
     const tx = db.transaction((tagName, snapshotRows) => {
-      updateDeleted.run({ tag_name: tagName, status_changed_at: now, observed_at: now })
+      const previouslyActive = listActive.all({ tag_name: tagName })
+      const snapshotKeys = new Set(snapshotRows.map(row => `${row.target_type}\0${row.target_path}`))
+      for (const row of previouslyActive) {
+        if (!snapshotKeys.has(`${row.target_type}\0${row.target_path}`)) {
+          markDeleted.run({ id: row.id, status_changed_at: now, observed_at: now })
+        }
+      }
       for (const row of snapshotRows) {
         upsert.run({
           tag_name: tagName,
