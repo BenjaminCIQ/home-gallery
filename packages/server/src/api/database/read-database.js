@@ -51,7 +51,8 @@ const mergeEvents = (database, getEvents, eventsFileName, cb) => {
       cb(null, database)
     } else {
       const t0 = Date.now()
-      const changedEntries = applyEvents(database, events.data, eventsFileName)
+      // physical removal already happened at push time; replay must not unlink again
+      const changedEntries = applyEvents(database, events.data, eventsFileName, { skipRemoveFromFrameFile: true })
       log.debug(t0, `Applied ${events.data.length} events to ${changedEntries.length} of ${database.data.length} database entries`)
       cb(null, database)
     }

@@ -132,7 +132,8 @@
     #materializationMode: auto
     #materializationMode: link
     #materializationMode: copy
-    # Optional local remove policy override
+    # Optional local remove policy override (local_folder only; ignored for nextcloud_tag sources:
+    # originals are never moved/deleted there, only the frame link and, for individually tagged files, the Nextcloud tag)
     #onRemoveFromFrame: trash
     #onRemoveFromFrame: delete
     # Optional local trash folder override

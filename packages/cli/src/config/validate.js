@@ -49,6 +49,9 @@ const validateNextcloudProjection = (config, sources) => {
 
   for (const source of nextcloudSources) {
     source.tag || assertError(`Source '${source.name || source.index}' with type nextcloud_tag requires 'tag'`)
+    if (source.onRemoveFromFrame || source.trashPath) {
+      log.warn(`Source '${source.name || source.index}' (nextcloud_tag): onRemoveFromFrame/trashPath are ignored. Originals are never moved or deleted; only the frame link and, for individually tagged files, the Nextcloud tag are removed`)
+    }
     source.localDir || assertError(`Source '${source.name || source.index}' with type nextcloud_tag requires 'localDir' pointing to local Nextcloud sync root`)
   }
 }

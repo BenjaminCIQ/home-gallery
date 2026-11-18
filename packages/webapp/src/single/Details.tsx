@@ -312,7 +312,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="flex items-center gap-2 px-4 py-2 text-red-400 border border-red-600 rounded hover:bg-red-700/40 hover:text-red-200"
-              title="Remove this media from frame"
+              title="Remove this media from frame (original is kept)"
             >
               <FontAwesomeIcon icon={icons.faTrash} />
               Remove from frame
@@ -330,7 +330,7 @@ export const Details = ({entry, dispatch}: {entry: Entry, dispatch: any}) => {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg text-gray-300 w-80">
             <h2 className="text-lg mb-4">Remove From Frame</h2>
-            <p className="mb-6">Are you sure you want to remove this image from frame?</p>
+            <p className="mb-6">Remove this image from the frame? The original stays in Nextcloud.</p>
 
             <div className="flex justify-end gap-3">
               <button
