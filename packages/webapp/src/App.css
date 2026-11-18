@@ -55,3 +55,11 @@
   --color-danger-900: var(--color-red-900);
   --color-danger-950: var(--color-red-950);
 }
+
+/* The timeline scrollbar (list/scrollbar) replaces the native one; restores pre-tailwind `scrollbar-hidden` */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
