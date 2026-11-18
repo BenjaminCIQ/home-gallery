@@ -11,6 +11,17 @@ const PREFIX = 'nextcloud_reconcile_skip:'
 
 const SYNC_NOTIFICATIONS_ABSOLUTE_MAX = 200
 
+// Every event type mapRow reports as warning or error; anything else is info and not shown.
+const FAILURE_EVENT_TYPES = [
+  'nextcloud_reconcile_skipped',
+  'nextcloud_occ_tag_delete_failed',
+  'nextcloud_projection_unsafe_path',
+  'nextcloud_projection_missing_local_file',
+  'nextcloud_projection_materialize_failed',
+  'remove_from_frame_stale_target',
+  'remove_from_frame_stale_target_resolved',
+]
+
 /** @param {object} [config] */
 const resolveSyncNotificationsLimit = config => {
   const raw = config?.nextcloud?.syncNotificationsMaxItems
@@ -180,23 +191,31 @@ export async function mediaStateSyncNotificationsApi(context) {
 
     try {
       const limit = resolveSyncNotificationsLimit(config)
+      // Bare columns come from the MAX(id) row (SQLite min/max aggregate rule).
       const rows = db.prepare(`
-        SELECT id, event_type, source_ref, source_type, file_path, reason, created_at
+        SELECT MAX(id) AS id, event_type, source_ref, source_type, file_path, reason, created_at, COUNT(*) AS repeat_count
         FROM events
-        WHERE event_type GLOB 'nextcloud*'
-           OR event_type GLOB 'remove_from_frame_stale_target*'
-        ORDER BY id DESC
-        LIMIT ?
-      `).all(limit)
+        WHERE event_type IN (${FAILURE_EVENT_TYPES.map(() => '?').join(', ')})
+        GROUP BY event_type, reason
+      `).all(...FAILURE_EVENT_TYPES)
+
+      // Collapse repeats of the same notification kind into its newest occurrence.
+      const newestByKind = new Map()
+      for (const row of rows) {
+        const item = mapRow(row)
+        const key = `${item.event_type}|${item.title}`
+        const prev = newestByKind.get(key)
+        const repeatCount = row.repeat_count + (prev?.repeat_count || 0)
+        newestByKind.set(key, !prev || item.id > prev.id
+          ? { ...item, repeat_count: repeatCount }
+          : { ...prev, repeat_count: repeatCount })
+      }
 
       const notifyOnlyFailures = true
-      const items = rows
-        .map(mapRow)
-        .filter(item => item.severity === 'error' || item.severity === 'warning')
-        .map(item => ({
-          ...item,
-          counts_as_unread: true
-        }))
+      const items = [...newestByKind.values()]
+        .sort((a, b) => b.id - a.id)
+        .slice(0, limit)
+        .map(item => ({ ...item, counts_as_unread: true }))
       return res.json({ configured: true, notifyOnlyFailures, limit, items })
     } catch (err) {
       log.error(err, 'Failed to read sync notifications')

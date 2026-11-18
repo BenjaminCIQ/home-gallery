@@ -190,7 +190,10 @@ export const SyncNotificationInbox = () => {
                   onClick={() => toggleExpand(item.id)}
                 >
                   <div className="flex justify-between gap-2 text-xs text-gray-500">
-                    <span>{formatWhen(item.created_at)}</span>
+                    <span>
+                      {formatWhen(item.created_at)}
+                      {(item.repeat_count ?? 1) > 1 && ` · ×${item.repeat_count}`}
+                    </span>
                     {item.source_ref && <span className="truncate">{item.source_ref}</span>}
                   </div>
                   <div className="mt-1 text-sm font-medium">{item.title}</div>

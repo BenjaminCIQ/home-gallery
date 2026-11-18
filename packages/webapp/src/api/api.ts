@@ -83,6 +83,7 @@ export type SyncNotificationItem = {
   title: string
   summary: string
   detail: string
+  repeat_count?: number
   counts_as_unread: boolean
   raw?: { reason?: string | null }
 }
