@@ -83,11 +83,12 @@ export const MediaView = () => {
   const isSlideshowActive = useSingleViewStore(state => state.isSlideshowActive)
   const setIsSlideshowActive = useSingleViewStore(actions => actions.setIsSlideshowActive)
 
-  const hideNavigation = false//useSingleViewStore(state => state.hideNavigation)
-  const setHideNavigation = useSingleViewStore(actions => actions.setHideNavigation)
-
   const getState = useSingleViewStore.getState;
   const shuffledIndices = useSingleViewStore(state => state.shuffledIndices)
+  const shuffledIndex = useSingleViewStore(state => state.shuffledIndex)
+  const shuffleImages = useSingleViewStore(state => state.shuffleImages)
+  const prevPermutationTail = useSingleViewStore(state => state.prevPermutationTail)
+  const viewingTailAt = useSingleViewStore(state => state.viewingTailAt)
   const setShuffledIndex = useSingleViewStore(actions => actions.setShuffledIndex)
   const setShuffledIndices = useSingleViewStore(actions => actions.setShuffledIndices)
   const setPrevPermutationTail = useSingleViewStore(actions => actions.setPrevPermutationTail)
@@ -97,6 +98,8 @@ export const MediaView = () => {
   const slideshowIntervalRef = useRef<number | null>(null);
   const inactivityTimeoutRef = useRef<number | null>(null);
   const navigationTimeoutRef = useRef<number | null>(null);
+  // The slideshow interval outlives renders; always call the latest dispatch (current entries/state)
+  const dispatchRef = useRef<(action: { type: string, fromSlideshow?: boolean }) => void>(() => {});
 
   const loopImages = useSingleViewStore(state => state.loopImages)
   const clearShuffleDirty = useSingleViewStore(state => state.clearShuffleDirty)
@@ -114,10 +117,29 @@ export const MediaView = () => {
   let index = findEntryIndex(location, entries, id);
 
   const current = entries[index];
-  const prev = entries[lastIndex];
-  let next = (index === entries.length - 1 && loopImages)
-  ? entries[0]
-  : entries[index + 1];
+
+  // Mirrors the prev/next branches of dispatch so nav buttons and preloading follow the slideshow order
+  const getNeighbourIndices = (): [number, number] => {
+    const len = shuffledIndices.length
+    if (viewingTailAt !== null && prevPermutationTail.length) {
+      return [prevPermutationTail[viewingTailAt - 1] ?? -1, prevPermutationTail[viewingTailAt + 1] ?? shuffledIndices[0]]
+    }
+    if (len !== entries.length || shuffledIndices[shuffledIndex] !== index) {
+      return [index - 1, index === entries.length - 1 && loopImages ? 0 : index + 1]
+    }
+    const prevIndex = shuffledIndex > 0 ? shuffledIndices[shuffledIndex - 1]
+      : shuffleImages && prevPermutationTail.length ? prevPermutationTail[prevPermutationTail.length - 1]
+      : loopImages ? shuffledIndices[len - 1] : -1
+    const nextIndex = shuffledIndex < len - 1 ? shuffledIndices[shuffledIndex + 1]
+      : !loopImages ? -1
+      // next permutation is drawn on navigation; keep the next button without preloading a wrong image
+      : shuffleImages ? index
+      : shuffledIndices[0]
+    return [prevIndex, nextIndex]
+  }
+  const [prevIndex, nextIndex] = getNeighbourIndices()
+  const prev = entries[prevIndex];
+  const next = entries[nextIndex];
 
   const isImage = current && (current.type === 'image' || current.type === 'rawImage');
   const isVideo = current && (current.type === 'video')
@@ -204,9 +226,14 @@ export const MediaView = () => {
     }
 
     slideshowIntervalRef.current = setInterval(() => {
-      dispatch({ type: "next", fromSlideshow: true });
+      dispatchRef.current({ type: "next", fromSlideshow: true });
     }, getState().slideshowInterval);
   }, []);
+
+  // Restart the countdown on every media change, so a manual swipe gets a full interval
+  useEffect(() => {
+    if (getState().isSlideshowActive) startSlideShowInterval();
+  }, [id]);
   
   const startInactivityTimeout = useCallback(() => {
     if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
@@ -431,10 +458,6 @@ export const MediaView = () => {
       clearSingleViewNavigationState();
       search({type: 'none'});
       navigate('/');
-    } else if (type == 'play') {
-      setHideNavigation(true);
-    } else if (type == 'pause') {
-      setHideNavigation(false);
     } else if (type == 'search') {
       navigate(`/search/${encodeUrl(action.query)}`);
     } else if (type == 'map' && current?.latitude && current?.longitude && !disableFlags.includes('map')) {
@@ -447,6 +470,7 @@ export const MediaView = () => {
       });
     }
   }
+  dispatchRef.current = dispatch
 
   const onSwipe = (ev) => {
     if (ev.direction === Hammer.DIRECTION_LEFT) {
@@ -478,15 +502,13 @@ export const MediaView = () => {
     dispatch({type: 'list'})
   }
 
-  console.log('Media object', current);
-
   return (
     <>
       <SingleTagDialogProvider>
         <div className="flex flex-col w-screen md:flex-row h-dvh">
           <div className={classNames('w-full', {'h-1/2 flex-shrink-0 md:flex-shrink md:h-full': showDetails, 'h-full': !showDetails})}>
             <div className="relative w-full h-full overflow-hidden">
-              {!hideNavigation && showNavigation &&
+              {showNavigation &&
                 <MediaNav current={current} prev={prev} next={next} listLocation={listLocation} dispatch={dispatch} />
               }
               {isImage &&
@@ -501,7 +523,7 @@ export const MediaView = () => {
                 <MediaViewUnknownType key={key} media={current} next={next} prev={prev}/>
               }
 
-              {!hideNavigation && showNavigation &&
+              {showNavigation &&
                 <SettingsMenu
                   settingsOpen={settingsOpen}
                   setSettingsOpen={setSettingsOpen}

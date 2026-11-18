@@ -8,7 +8,6 @@ export interface SingleViewStore {
   showAnnotations: boolean
   showNavigation: boolean
   isSlideshowActive: boolean
-  hideNavigation: boolean
   shuffledIndex: number
   shuffledIndices: number[]
   prevPermutationTail: number[]
@@ -27,7 +26,6 @@ export interface SingleViewStore {
   setShowAnnotations(show: boolean): void
   toggleShowNavigation(): void
   setIsSlideshowActive(active: boolean): void
-  setHideNavigation(hide: boolean): void
   setShuffledIndex(shuffledIndex: number): void
   setShuffledIndices(indices: number[]): void
   setPrevPermutationTail(tail: number[]): void
@@ -38,9 +36,9 @@ export interface SingleViewStore {
   setResetSearchOnLoopEnd(v: boolean): void
   setShuffleImages(v: boolean): void
   clearShuffleDirty(): void
-  setSlideshowInterval(v: boolean): void
-  setSlideshowTimeout(v: boolean): void
-  setNavigationTimeout(v: boolean): void
+  setSlideshowInterval(v: number): void
+  setSlideshowTimeout(v: number): void
+  setNavigationTimeout(v: number): void
 }
 
 const excludeStateProps = (excludeProps: string[] = []) => (state: any): any => Object.fromEntries(
@@ -59,7 +57,6 @@ export const useSingleViewStore = create<
   showAnnotations: false,
   showNavigation: true,
   isSlideshowActive: false,
-  hideNavigation: false,
   shuffledIndices: [],
   shuffledIndex: 0,
   prevPermutationTail: [],
@@ -78,7 +75,6 @@ export const useSingleViewStore = create<
   setShowAnnotations: (show: boolean) => set((state: SingleViewStore) => ({...state, showAnnotations: show})),
   toggleShowNavigation: () => set(state => ({showNavigation: !state.showNavigation})),
   setIsSlideshowActive: (active: boolean) => set((state) => ({ ...state, isSlideshowActive: active })),
-  setHideNavigation: (hide: boolean) => set((state) => ({ ...state, hideNavigation: hide })),
   setShuffledIndex: (shuffledIndex: number) => set((state: SingleViewStore) => ({...state, shuffledIndex})),
   setShuffledIndices: (indices: number[]) => set((state) => ({ ...state, shuffledIndices: indices })),
   setPrevPermutationTail: (tail: number[]) => set({ prevPermutationTail: tail }),

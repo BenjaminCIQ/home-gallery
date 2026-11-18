@@ -1,8 +1,10 @@
 import * as React from "react";
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useEntryStore } from "../store/entry-store";
 import { useEditModeStore } from '../store/edit-mode-store';
+import { useSingleViewStore } from "../store/single-view-store";
 
 import { FluentList } from "./FluentList";
 import { NavBar } from "../navbar/NavBar";
@@ -30,6 +32,38 @@ const useViewHeight = (offset) => {
   return height
 }
 
+const idleEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'scroll']
+
+// Photo frame: after the slideshow start timeout without interaction, start the slideshow on a random image
+const useIdleSlideshow = () => {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    let timer: number | undefined
+    const restart = () => {
+      clearTimeout(timer)
+      timer = window.setTimeout(start, useSingleViewStore.getState().slideshowTimeout)
+    }
+    const start = () => {
+      const { entries } = useEntryStore.getState()
+      if (!entries.length) return restart()
+      const index = Math.floor(Math.random() * entries.length)
+      const singleView = useSingleViewStore.getState()
+      singleView.setIsSlideshowActive(true)
+      if (singleView.showNavigation) singleView.toggleShowNavigation()
+      navigate(`/view/${entries[index].shortId}`, {state: {listLocation: location, index}})
+    }
+
+    idleEvents.forEach(name => window.addEventListener(name, restart, {passive: true}))
+    restart()
+    return () => {
+      clearTimeout(timer)
+      idleEvents.forEach(name => window.removeEventListener(name, restart))
+    }
+  }, [location])
+}
+
 const mobileRowHeights = {minHeight: 75, maxHeight: 110, maxPotraitHeight: 185}
 const desktopRowHeights = {minHeight: 120, maxHeight: 200, maxPotraitHeight: 280}
 
@@ -40,6 +74,7 @@ export const List = () => {
   const selectedIds = useEditModeStore(state => state.selectedIds);
 
   const containerRef = useRef(window)
+  useIdleSlideshow()
 
   const { width, height } = useBodyDimensions();
   const [ deviceType ] = useDeviceType();

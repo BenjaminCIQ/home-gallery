@@ -28,11 +28,9 @@ export const MediaViewVideo = (props) => {
 
     const onPause = () => {
       setIsPlaying(false)
-      dispatch({type: 'pause'})
     }
     const onPlay = () => {
       setIsPlaying(true)
-      dispatch({type: 'play'})
     }
 
     e.addEventListener('pause', onPause)
@@ -42,7 +40,7 @@ export const MediaViewVideo = (props) => {
       e.removeEventListener('pause', onPause)
       e.removeEventListener('play', onPlay)
     }
-  }, [ref, dispatch])
+  }, [ref])
 
   // Autoplay if slideshow is active (muted often required by browser policy)
   useEffect(() => {
