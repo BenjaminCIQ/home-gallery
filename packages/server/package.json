@@ -38,7 +38,6 @@
     "@home-gallery/query": "file:../query",
     "better-sqlite3": "^12.8.0",
     "compression": "^1.8.1",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
     "memory-cache": "^0.2.0",
     "open": "^10.2.0",

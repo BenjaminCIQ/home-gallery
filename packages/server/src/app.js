@@ -1,7 +1,6 @@
 import path from 'path';
 import express from 'express';
 import compression from 'compression';
-import cors from 'cors';
 import bodyParser from 'body-parser';
 import { fileURLToPath } from 'url'
 
@@ -54,7 +53,6 @@ export async function createApp(context) {
   app.use(loggerMiddleware())
 
   const router = context.router = express.Router()
-  router.use(cors());
   router.use(compression({ filter: shouldCompress }))
 
   router.use(skipIf(express.static(webappDir, {maxAge: '1h'}), isIndex))
