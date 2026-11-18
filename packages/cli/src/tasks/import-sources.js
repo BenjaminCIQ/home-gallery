@@ -32,7 +32,10 @@ const updateIndices = async (sources, options) => {
   const updatedSources = []
   for (const source of sources) {
     try {
-      await updateIndex(source, options);
+      // unplugged drive: keep the existing index, a scan would drop all its entries
+      if (!source.nextcloudDiscovery?.skipReason?.includes('local_dir_unavailable:')) {
+        await updateIndex(source, options)
+      }
       updatedSources.push(source)
     } catch (err) {
       err.updatedSources = [...updatedSources, source]

@@ -274,6 +274,10 @@ export const reconcileProjectionSources = async (sources, options = {}) => {
 
     const sourceRef = source.name || source.index
     try {
+      // Unplugged drive: leave media rows, tag snapshot and projection untouched
+      if (!(await fs.stat(source.nextcloudLocalRoot).catch(() => false))) {
+        throw new Error(`${NEXTCLOUD_RECONCILE_SKIP_PREFIX}local_dir_unavailable:${source.nextcloudLocalRoot}`)
+      }
       const tagTargets = await discoverNextcloudTagTargets(source, options?.config)
       const tagSnapshotRows = source.namedFolder
         ? tagTargets.map(row => stripNamedFolderFromDiscoveryRow(row, source.namedFolder))

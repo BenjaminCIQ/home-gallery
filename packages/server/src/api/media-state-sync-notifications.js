@@ -60,6 +60,16 @@ const mapReconcileSkipped = reason => {
     }
   }
 
+  if (rest.startsWith('local_dir_unavailable:')) {
+    const dir = rest.slice('local_dir_unavailable:'.length)
+    return {
+      severity: 'warning',
+      title: 'Photo drive not connected',
+      summary: dir || 'Local photo folder not found',
+      detail: `${raw}\n\nReconnect the drive. Sync is paused and the frame keeps its current photos.`
+    }
+  }
+
   if (rest.startsWith('tag_not_found:')) {
     const tag = rest.slice('tag_not_found:'.length)
     return {
